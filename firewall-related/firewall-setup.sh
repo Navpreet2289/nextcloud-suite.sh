@@ -30,11 +30,12 @@ iptables -A OUTPUT -o lo -j ACCEPT
 
 # Log everything by creating and using logchains.
 iptables -N LOG_ACCEPT
-iptables -A LOG_ACCEPT -j LOG --log-prefix "INPUT:ACCEPT: " --log-level 6
+iptables -A LOG_ACCEPT -j LOG --log-prefix "iptables: " --log-level 6
 iptables -A LOG_ACCEPT -j ACCEPT
 iptables -N LOG_DROP
-iptables -A LOG_DROP -j LOG --log-prefix "INPUT:DROP: " --log-level 6
+iptables -A LOG_DROP -j LOG --log-prefix "iptables: " --log-level 6
 iptables -A LOG_DROP -j DROP
+
 
 # Defend against brute-force attempts on ssh-port. -I flag to place at
 # top of chain.
@@ -86,9 +87,9 @@ iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j LOG_DROP
 iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j LOG_DROP
 
 # These rules add scanners to the portscan list, and log the attempt.
-iptables -A INPUT   -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG --log-prefix "Portscan:"
+#iptables -A INPUT   -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG --log-prefix "Portscan:"
 iptables -A INPUT   -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG_DROP
-iptables -A FORWARD -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG --log-prefix "Portscan:"
+#iptables -A FORWARD -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG --log-prefix "Portscan:"
 iptables -A FORWARD -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG_DROP
 # Anyone who tried to portscan us is locked out for an entire day.
 iptables -A INPUT   -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP
