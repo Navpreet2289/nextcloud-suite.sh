@@ -30,10 +30,10 @@ iptables -A OUTPUT -o lo -j ACCEPT
 
 # Log everything by creating and using logchains.
 iptables -N LOG_ACCEPT
-iptables -A LOG_ACCEPT -j LOG --log-prefix "iptables: ACCEPT" --log-level 6
+iptables -A LOG_ACCEPT -j LOG --log-prefix "iptables: ACCEPT " --log-level 6
 iptables -A LOG_ACCEPT -j ACCEPT
 iptables -N LOG_DROP
-iptables -A LOG_DROP -j LOG --log-prefix "iptables: DROP" --log-level 6
+iptables -A LOG_DROP -j LOG --log-prefix "iptables: DROP " --log-level 6
 iptables -A LOG_DROP -j DROP
 
 # create /etc/rsyslog.d/iptables.conf with
