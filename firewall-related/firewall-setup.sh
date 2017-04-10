@@ -36,6 +36,15 @@ iptables -N LOG_DROP
 iptables -A LOG_DROP -j LOG --log-prefix "iptables: " --log-level 6
 iptables -A LOG_DROP -j DROP
 
+# create /etc/rsyslog.d/iptables.conf with
+#: <<EOF
+cat <<EOT > /etc/rsyslog.d/iptables.conf
+:msg, startswith, "iptables: " -/var/log/iptables.log
+& ~
+:msg, regex, "^\[ *[0-9]*\.[0-9]*\] iptables: " -/var/log/iptables.log
+& ~
+EOT
+#EOF
 
 # Defend against brute-force attempts on ssh-port. -I flag to place at
 # top of chain.
