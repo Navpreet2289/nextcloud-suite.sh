@@ -19,7 +19,7 @@
 # <http://www.gnu.org/licenses/>.
 
 # This software is based on another script, but most of it is different.
-# Credits to Guilhem Moulin who created https://git.fripost.org/fripost-ansible/tree/roles/common/files/usr/local/sbin/update-firewall.sh
+# Credits to Guilhem Moulin who wrote https://git.fripost.org/fripost-ansible/tree/roles/common/files/usr/local/sbin/update-firewall.sh
 
 ########################################
 
@@ -38,6 +38,8 @@ iptables -A LOG_DROP -j DROP
 
 # create /etc/rsyslog.d/iptables.conf with
 #: <<EOF
+mkdir -p /etc/rsyslog.d/
+touch /etc/rsyslog.d/iptables.conf
 cat <<EOT > /etc/rsyslog.d/iptables.conf
 :msg, startswith, "iptables: " -/var/log/iptables.log
 & ~
@@ -45,26 +47,23 @@ cat <<EOT > /etc/rsyslog.d/iptables.conf
 & ~
 EOT
 #EOF
-# /usr/bin/iptables restart
+/usr/bin/iptables restart
 
 # Defend against brute-force attempts on ssh-port. -I flag to place at
 # top of chain.
-iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --set # add ip to recent list with --set.
+iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --set # adds ip to recent list with --set.
 iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j LOG_DROP 
 # Secondly, to make sure you don't lock yourself out from your server
 # you should add two allow ssh rules to iptables:
 iptables -A INPUT -p tcp -m tcp --dport 22 -j LOG_ACCEPT
 iptables -A OUTPUT -p tcp -m tcp --sport 22 -j LOG_ACCEPT
-# And for initiating connections from server.
-iptables -A OUTPUT -p tcp -m tcp --dport 22 -j LOG_ACCEPT
-iptables -A INPUT -p tcp -m tcp --sport 22 -j LOG_ACCEPT
 # These udp-ports are for Mosh which is an ssh wrapper software for
 # better responsiveness and roaming.
 iptables -A INPUT -p udp -m udp --dport 60000:61000 -j LOG_ACCEPT
 iptables -A OUTPUT -p udp -m udp --sport 60000:61000 -j LOG_ACCEPT
 iptables -A INPUT -p tcp -m tcp --dport 60000:61000 -j LOG_ACCEPT
 iptables -A OUTPUT -p tcp -m tcp --sport 60000:61000 -j LOG_ACCEPT
-# and for FTP data connections etc:
+# and for FTP data connections and everything else auto-identified as a related connection:
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
 # Enable outputs on OpenVPN interface (change tun0 to tap0 or any
@@ -127,45 +126,9 @@ done
 iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --set
 iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --update --seconds 1 --hitcount 60 -j LOG_DROP
 
-# Allow the following hosted services on top of SSH:
-# 
-# 53=bind9 dns.
-# 80/443=nginx http,https
-# 587/465/25=postfix submission,smtps,smtp
-# 143/993/110/995/4190=dovecot imap,imaps,pop3,pop3s,managesieve.
-# 8443,3478,5349=coturn STUN/TURN server.
-# 9980=LibreOffice Online websocket daemon.
-# 9418=git with git-daemon
-# 1935=rtmp ports for video streaming, 554=RSTP for streaming.
-# Also, we use wget and a browser on this server thus we allow
-# 80/443 for web, udp 21 for FTP and DNS queries with port 53.
-
-# Allow outgoing browsing, email, ftp, DNS and XMR-mining at xmr.suprnova.cc:5221 and bss_conn.c:246
-iptables -A OUTPUT -p udp --match multiport --dports 21,53 -j LOG_ACCEPT
-iptables -A OUTPUT -p tcp --match multiport --dports 53,80,443,246,5221 -j LOG_ACCEPT
-
-# Allow requests to our services.
-iptables -A INPUT -p udp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-iptables -A INPUT -p tcp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-iptables -A INPUT -p tcp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-iptables -A INPUT -p udp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-# Allow outgoing established connections from our services.
-iptables -A OUTPUT -p udp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT
-iptables -A OUTPUT -p tcp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT
-
-# No need to use for-loop as below anymore since iptables have multiport option.
-#for SERVICE in '53' '80' '443' '587' '465' '25' '143' '993' '110' '995' '4190' '8443' '3478' ; do
-#    iptables -A INPUT -p tcp -m tcp -d $OURIP --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
-#    iptables -A OUTPUT -p tcp -m tcp -s $OURIP --sport $SERVICE -m state --state ESTABLISHED -j ACCEPT
-#    iptables -A OUTPUT -s $OURIP -p udp -m udp --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
-#    iptables -A INPUT -d $OURIP -p udp -m udp --sport $SERVICE -m state --state ESTABLISHED -j ACCEPT    
-#done 
-#for SERVICE in '53' '80' '443' '587' '465' '25' '143' '993' '110' '995' '4190' '8443' '3478' ; do
-#    iptables -A OUTPUT -s $OURIP -p tcp -m tcp --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
-#    iptables -A INPUT -d $OURIP -p tcp -m tcp --sport $SERVICE -m state --state ESTABLISHED -j ACCEPT
-#    iptables -A OUTPUT -s $OURIP -p udp -m udp --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
-#    iptables -A INPUT -d $OURIP -p udp -m udp --sport $SERVICE -m state --state ESTABLISHED -j ACCEPT    
-#done 
+# Allow establishing connections on tcp ports for ssh, dns, browsing, email, XMR-mining at xmr.suprnova.cc:5221, bss_conn.c:246 and udp ports for ftp and DNS.
+iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
+iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,25,465,587,143,993,246,5221 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
 
 # Log and drop all packages which are not specifically allowed.
 iptables -A INPUT -s 0.0.0.0/0 -d 0.0.0.0/0 -j LOG_DROP
@@ -175,14 +138,9 @@ iptables -P INPUT DROP
 iptables -P OUTPUT DROP
 iptables -P FORWARD DROP 
 
-# Save configuration across network restarts (reboots).
-#/sbin/iptables-save > /etc/iptables.up.rules
+# FOR ARCH LINUX ONLY: Save configuration across network restarts and reboots.
+touch /etc/iptables/iptables.rules
 
-#cat <<EOT > /etc/network/if-pre-up.d/iptables
-##!/bin/bash
-#/sbin/iptables-restore < /etc/iptables.up.rules
-#
-#EOT
-#
-#chmod +x /etc/network/if-pre-up.d/iptables
+iptables-save > /etc/iptables/iptables.rules
+
 
