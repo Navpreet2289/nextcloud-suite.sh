@@ -337,7 +337,6 @@ EOF
 # Section ref2: Ecphrasis comments
 # https://help.nextcloud.com/t/complete-nc-installation-on-debian-with-spreed-me-and-turn-step-by-step/2436/38
 
-
 #
 # Install software
 #

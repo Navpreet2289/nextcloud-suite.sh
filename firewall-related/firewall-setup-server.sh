@@ -23,6 +23,8 @@
 
 ########################################
 
+localif="eth0"
+
 # localhost connections are always allowed (failure to allow this will
 # break many programs which rely on localhost)
 iptables -A INPUT -i lo -j ACCEPT
@@ -61,9 +63,6 @@ iptables -A INPUT -p udp -m udp --dport 60000:61000 -j LOG_ACCEPT
 iptables -A OUTPUT -p udp -m udp --sport 60000:61000 -j LOG_ACCEPT
 iptables -A INPUT -p tcp -m tcp --dport 60000:61000 -j LOG_ACCEPT
 iptables -A OUTPUT -p tcp -m tcp --sport 60000:61000 -j LOG_ACCEPT
-# and for FTP data connections and everything else auto-identified as a related connection:
-iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
 # Enable outputs on OpenVPN interface (change tun0 to tap0 or any
 # other openvpn interface you might be using) and enable port for
 # establishing VPN. Check your /etc/openvpn/client.conf for protocol
@@ -124,31 +123,37 @@ done
 iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --set
 iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --update --seconds 1 --hitcount 60 -j LOG_DROP
 
+# Allow server to establish NEW outgoing connections on tcp ports for dns, browsing, email, XMR-mining at xmr.suprnova.cc:5221, bss_conn.c:246, and udp ports for ftp and DNS.
+iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
+iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
+
+# Allow requests to our services.
 # Allow the following hosted services on top of SSH:
 # 
 # 53=bind9 dns.
 # 80/443=nginx http,https
 # 587/465/25=postfix submission,smtps,smtp
 # 143/993/110/995/4190=dovecot imap,imaps,pop3,pop3s,managesieve.
-# 8443,3478,5349=coturn STUN/TURN server.
+# 8443,3478,5349=coturn STUN/TURN server. 8443 is tls.
 # 9980=LibreOffice Online websocket daemon.
 # 9418=git with git-daemon
 # 1935=rtmp ports for video streaming, 554=RSTP for streaming.
-# Also, we use wget and a browser on this server thus we allow
-# 80/443 for web, udp 21 for FTP and DNS queries with port 53.
-
-# Allow server to establish connections on tcp ports for ssh, dns, browsing, email, XMR-mining at xmr.suprnova.cc:5221, bss_conn.c:246 and udp ports for ftp and DNS.
-iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-
-# Allow requests to our services.
 iptables -A INPUT -p udp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
 iptables -A INPUT -p tcp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
 iptables -A INPUT -p tcp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
 iptables -A INPUT -p udp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-# Allow outgoing established connections from our services.
+# Allow udp port 5353 for multicast DNS on local network port (avahi-daemon)
+iptables -A INPUT -p udp --in-interface ${localif} --dport 5353 -j LOG_ACCEPT
+
+# Allow outgoing related connections
+iptables -A OUTPUT -p udp --out-interface ${localif} -d 224.0.0.251 --dport 5353 -j LOG_ACCEPT
+# Allow everything auto-identified as a related connection:
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
+# Specifically allow outgoing established connections from our services. (This should be taken care of automatically by above statement)
 iptables -A OUTPUT -p udp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT
 iptables -A OUTPUT -p tcp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT
+
 
 # No need to use for-loop as below anymore since iptables have multiport option (although max 15 entries).
 #for SERVICE in '53' '80' '443' '587' '465' '25' '143' '993' '110' '995' '4190' '8443' '3478' ; do

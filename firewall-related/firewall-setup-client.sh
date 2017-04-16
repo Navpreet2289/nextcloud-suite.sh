@@ -71,8 +71,8 @@ iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
 # establishing VPN. Check your /etc/openvpn/client.conf for protocol
 # and port numbers.
 iptables -A OUTPUT --out-interface tun0 -j LOG_ACCEPT                           
-iptables -A OUTPUT -p udp --dport 1196 -j LOG_ACCEPT 
-iptables -A OUTPUT -p udp --dport 1197 -j LOG_ACCEPT
+iptables -A OUTPUT -p udp --dport 1194 -j LOG_ACCEPT 
+iptables -A OUTPUT -p udp --dport 1195 -j LOG_ACCEPT
 # Reject packets from RFC1918 class networks (i.e., spoofed)
 iptables -A INPUT -s 10.0.0.0/8     -j LOG_DROP
 iptables -A INPUT -s 169.254.0.0/16 -j LOG_DROP
