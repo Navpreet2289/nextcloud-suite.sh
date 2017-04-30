@@ -19,7 +19,7 @@
 # <http://www.gnu.org/licenses/>.
 
 # This software is based on another script, but most of it is different.
-# Credits to Guilhem Moulin who created https://git.fripost.org/fripost-ansible/tree/roles/common/files/usr/local/sbin/update-firewall.sh
+# Credits to Guilhem Moulin who wrote https://git.fripost.org/fripost-ansible/tree/roles/common/files/usr/local/sbin/update-firewall.sh
 
 ########################################
 
@@ -32,84 +32,79 @@ iptables -A OUTPUT -o lo -j ACCEPT
 
 # Log everything by creating and using logchains.
 iptables -N LOG_ACCEPT
-iptables -A LOG_ACCEPT -j LOG --log-prefix "iptables: ACCEPT " --log-level 6
+iptables -A LOG_ACCEPT -m limit --limit 5/m --limit-burst 10 -j NFLOG --nflog-group 0 --nflog-prefix "ACCEPT "
+# -j LOG --log-prefix "iptables: ACCEPT " --log-level 4
 iptables -A LOG_ACCEPT -j ACCEPT
 iptables -N LOG_DROP
-iptables -A LOG_DROP -j LOG --log-prefix "iptables: DROP " --log-level 6
+iptables -A LOG_DROP -m limit --limit 5/m --limit-burst 10 -j NFLOG --nflog-group 0 --nflog-prefix "DROP "
+# -j LOG --log-prefix "iptables: DROP " --log-level 4
 iptables -A LOG_DROP -j DROP
 
+# Only use this if not using ulogd.
 # create /etc/rsyslog.d/iptables.conf with
 #: <<EOF
-cat <<EOT > /etc/rsyslog.d/iptables.conf
-:msg, startswith, "iptables: " -/var/log/iptables.log
-& ~
-:msg, regex, "^\[ *[0-9]*\.[0-9]*\] iptables: " -/var/log/iptables.log
-& ~
-EOT
+#cat <<EOT > /etc/rsyslog.d/iptables.conf
+#:msg, startswith, "iptables: " -/var/log/iptables.log
+#& stop
+#:msg, regex, "^\[ *[0-9]*\.[0-9]*\] iptables: " -/var/log/iptables.log
+#& stop
+#EOT
 #EOF
-/usr/bin/iptables restart
 
 # Defend against brute-force attempts on ssh-port. -I flag to place at
 # top of chain.
-iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --set # add ip to recent list with --set.
-iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j LOG_DROP 
+iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --set -m comment --comment "Limit SSH IN" # add ip to recent list with --set.
+iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j LOG_DROP -m comment --comment "Limit SSH IN"
 # Secondly, to make sure you don't lock yourself out from your server
 # you should add two allow ssh rules to iptables:
-iptables -A INPUT -p tcp -m tcp --dport 22 -j LOG_ACCEPT
-iptables -A OUTPUT -p tcp -m tcp --sport 22 -j LOG_ACCEPT
+iptables -A INPUT -p tcp -m tcp --dport 22 -j ACCEPT -m comment --comment "SSH IN"
+iptables -A OUTPUT -p tcp -m tcp --sport 22 -j ACCEPT -m comment --comment "SSH OUT"
 # These udp-ports are for Mosh which is an ssh wrapper software for
 # better responsiveness and roaming.
-iptables -A INPUT -p udp -m udp --dport 60000:61000 -j LOG_ACCEPT
-iptables -A OUTPUT -p udp -m udp --sport 60000:61000 -j LOG_ACCEPT
-iptables -A INPUT -p tcp -m tcp --dport 60000:61000 -j LOG_ACCEPT
-iptables -A OUTPUT -p tcp -m tcp --sport 60000:61000 -j LOG_ACCEPT
-# Enable outputs on OpenVPN interface (change tun0 to tap0 or any
-# other openvpn interface you might be using) and enable port for
-# establishing VPN. Check your /etc/openvpn/client.conf for protocol
-# and port numbers.
-iptables -A OUTPUT --out-interface tun0 -j LOG_ACCEPT                           
-iptables -A OUTPUT -p udp --dport 1196 -j LOG_ACCEPT 
-iptables -A OUTPUT -p udp --dport 1197 -j LOG_ACCEPT
+iptables -A INPUT -p udp -m udp --dport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh UDP IN"
+iptables -A OUTPUT -p udp -m udp --sport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh UDP OUT"
+iptables -A INPUT -p tcp -m tcp --dport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh TCP IN"
+iptables -A OUTPUT -p tcp -m tcp --sport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh TCP OUT"
 # Reject packets from RFC1918 class networks (i.e., spoofed)
-iptables -A INPUT -s 10.0.0.0/8     -j LOG_DROP
-iptables -A INPUT -s 169.254.0.0/16 -j LOG_DROP
-iptables -A INPUT -s 172.16.0.0/12  -j LOG_DROP
-iptables -A INPUT -s 127.0.0.0/8    -j LOG_DROP
-iptables -A INPUT -s 224.0.0.0/4      -j LOG_DROP
-iptables -A INPUT -d 224.0.0.0/4      -j LOG_DROP
-iptables -A INPUT -s 240.0.0.0/5      -j LOG_DROP
-iptables -A INPUT -d 240.0.0.0/5      -j LOG_DROP
-iptables -A INPUT -s 0.0.0.0/8        -j LOG_DROP
-iptables -A INPUT -d 0.0.0.0/8        -j LOG_DROP
-iptables -A INPUT -d 239.255.255.0/24 -j LOG_DROP
-iptables -A INPUT -d 255.255.255.255  -j LOG_DROP
+iptables -A INPUT -s 10.0.0.0/8     -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -s 169.254.0.0/16 -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -s 172.16.0.0/12  -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -s 127.0.0.0/8    -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -s 224.0.0.0/4      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -d 224.0.0.0/4      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -s 240.0.0.0/5      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -d 240.0.0.0/5      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -s 0.0.0.0/8        -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -d 0.0.0.0/8        -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -d 239.255.255.0/24 -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -d 255.255.255.255  -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
 
 # Drop invalid packets immediately
-iptables -A INPUT   -m state --state INVALID -j LOG_DROP
-iptables -A FORWARD -m state --state INVALID -j LOG_DROP
-iptables -A OUTPUT  -m state --state INVALID -j LOG_DROP
+iptables -A INPUT   -m state --state INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
+iptables -A FORWARD -m state --state INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
+iptables -A OUTPUT  -m state --state INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
 # Drop bogus TCP packets
-iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j LOG_DROP
-iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j LOG_DROP
+iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j LOG_DROP -m comment --comment "Bogus tcp packet type"
+iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j LOG_DROP -m comment --comment "Bogus tcp packet type"
 
 # These rules add scanners to the portscan list, and log the attempt.
 #iptables -A INPUT   -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG --log-prefix "Portscan:"
-iptables -A INPUT   -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG_DROP
+iptables -A INPUT   -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG_DROP -m comment --comment "Portscan"
 #iptables -A FORWARD -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG --log-prefix "Portscan:"
-iptables -A FORWARD -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG_DROP
+iptables -A FORWARD -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG_DROP -m comment --comment "Portscan"
 # Anyone who tried to portscan us is locked out for an entire day.
-iptables -A INPUT   -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP
-iptables -A FORWARD -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP
+iptables -A INPUT   -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP -m comment --comment "Portscan: locked out for a day."
+iptables -A FORWARD -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP -m comment --comment "Portscan: locked out for a day."
 # Once the day has passed, remove them from the portscan list
-iptables -A INPUT   -m recent --name portscan --remove
-iptables -A FORWARD -m recent --name portscan --remove
+iptables -A INPUT   -m recent --name portscan --remove -m comment --comment "Portscan: address removed from recent blocking-list."
+iptables -A FORWARD -m recent --name portscan --remove -m comment --comment "Portscan: address removed from recent blocking-list."
 
 # Allow three types of ICMP packets to be received (so people can
 # check our presence), but restrict the flow to avoid ping flood
 # attacks. See iptables -p icmp --help for available icmp types.
 for y in 'echo-reply' 'destination-unreachable' 'echo-request' ; do
-    iptables -A INPUT -p icmp -m icmp --icmp-type $y -m limit --limit 1/second -j LOG_ACCEPT
-    iptables -A OUTPUT -p icmp -m icmp --icmp-type $y -m limit --limit 1/second -j LOG_ACCEPT
+    iptables -A INPUT -p icmp -m icmp --icmp-type $y -m limit --limit 1/second -j LOG_ACCEPT -m comment --comment "smurf-attack-protection"
+    iptables -A OUTPUT -p icmp -m icmp --icmp-type $y -m limit --limit 1/second -j LOG_ACCEPT -m comment --comment "smurf-attack-protection"
 done
 # Not needed anymore because of default drop policy.
 #for n in 'address-mask-request' 'timestamp-request' ; do
@@ -121,11 +116,11 @@ done
 # limiting overall, because then someone could easily shut us down by
 # saturating the limit.
 iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --set
-iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --update --seconds 1 --hitcount 60 -j LOG_DROP
+iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --update --seconds 1 --hitcount 60 -j LOG_DROP -m comment --comment "synflood-protection"
 
-# Allow server to establish NEW outgoing connections on tcp ports for dns, browsing, email, XMR-mining at xmr.suprnova.cc:5221, bss_conn.c:246, and udp ports for ftp and DNS.
-iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
+# User connections: tcp ports for dns, browsing, email, XMR-mining at xmr.suprnova.cc:5221, bss_conn.c:246, and udp ports for ftp and DNS.
+iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
+iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
 
 # Allow requests to our services.
 # Allow the following hosted services on top of SSH:
@@ -138,22 +133,29 @@ iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m st
 # 9980=LibreOffice Online websocket daemon.
 # 9418=git with git-daemon
 # 1935=rtmp ports for video streaming, 554=RSTP for streaming.
-iptables -A INPUT -p udp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-iptables -A INPUT -p tcp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-iptables -A INPUT -p tcp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-iptables -A INPUT -p udp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT
-# Allow udp port 5353 for multicast DNS on local network port (avahi-daemon)
-iptables -A INPUT -p udp --in-interface ${localif} --dport 5353 -j LOG_ACCEPT
+iptables -A INPUT -p udp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-request" 
+iptables -A INPUT -p tcp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-request"
+iptables -A INPUT -p tcp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection"
+iptables -A INPUT -p udp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection"
+# Allow local udp port 5353 for multicast DNS on local network port (avahi-daemon)
+iptables -A INPUT -p udp --in-interface ${localif} --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
 
-# Allow outgoing related connections
-iptables -A OUTPUT -p udp --out-interface ${localif} -d 224.0.0.251 --dport 5353 -j LOG_ACCEPT
+# Allow local outgoing multicast DNS connections
+iptables -A OUTPUT -p udp --out-interface ${localif} -d 224.0.0.251 --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
 # Allow everything auto-identified as a related connection:
-iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
 # Specifically allow outgoing established connections from our services. (This should be taken care of automatically by above statement)
-iptables -A OUTPUT -p udp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT
-iptables -A OUTPUT -p tcp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT
+iptables -A OUTPUT -p udp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
+iptables -A OUTPUT -p tcp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
 
+# Enable outputs on OpenVPN interface (change tun0 to tap0 or any
+# other openvpn interface you might be using) and enable port for
+# establishing VPN. Check your /etc/openvpn/client.conf for protocol
+# and port numbers.
+#iptables -A OUTPUT --out-interface tun0 -j LOG_ACCEPT 
+iptables -A OUTPUT -p udp --dport 1196 -j LOG_ACCEPT -m comment --comment "OVPN"
+iptables -A OUTPUT -p udp --dport 1197 -j LOG_ACCEPT -m comment --comment "OVPN"
 
 # No need to use for-loop as below anymore since iptables have multiport option (although max 15 entries).
 #for SERVICE in '53' '80' '443' '587' '465' '25' '143' '993' '110' '995' '4190' '8443' '3478' ; do

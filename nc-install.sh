@@ -18,6 +18,8 @@
 # along with Nextcloud-Suite.sh.  If not, see
 # <http://www.gnu.org/licenses/>.
 
+#  For sysinfo: https://bash.cyberciti.biz/guide/Getting_information_about_your_system
+
 sdomain="cloud"
 mydomain="domain.tld"
 nc="/var/www/$mydomain/nextcloud"
