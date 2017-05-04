@@ -142,12 +142,15 @@ iptables -A INPUT -p udp --in-interface ${localif} --dport 5353 -j LOG_ACCEPT -m
 
 # Allow local outgoing multicast DNS connections
 iptables -A OUTPUT -p udp --out-interface ${localif} -d 224.0.0.251 --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
-# Allow everything auto-identified as a related connection:
-iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
 # Specifically allow outgoing established connections from our services. (This should be taken care of automatically by above statement)
 iptables -A OUTPUT -p udp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
 iptables -A OUTPUT -p tcp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
+# Allow opening new connections on these same services from server.
+iptables -A OUTPUT -p tcp --match multiport --dports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
+iptables -A OUTPUT -p tcp --match multiport --dports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
+# Allow everything auto-identified as a related connection:
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
 
 # Enable outputs on OpenVPN interface (change tun0 to tap0 or any
 # other openvpn interface you might be using) and enable port for
