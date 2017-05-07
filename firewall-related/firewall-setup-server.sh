@@ -22,15 +22,25 @@
 # Credits to Guilhem Moulin who wrote https://git.fripost.org/fripost-ansible/tree/roles/common/files/usr/local/sbin/update-firewall.sh
 
 ########################################
+#
+# Example usage:
+# ./firewall-setup-server "sslh" "ipset"
+#
+########################################
 
 localif="eth0"
+pwd="$(pwd)"
 
 # localhost connections are always allowed (failure to allow this will
 # break many programs which rely on localhost)
 iptables -A INPUT -i lo -j ACCEPT
 iptables -A OUTPUT -o lo -j ACCEPT
 
-# Log everything by creating and using logchains.
+# Log everything by creating and using logchains. The first five
+# packets are allowed to exceed the five packets per minute, then the
+# limiting kicks in. If there is a pause, another burst is allowed but
+# not past the maximum rate set by the rule
+
 iptables -N LOG_ACCEPT
 iptables -A LOG_ACCEPT -m limit --limit 5/m --limit-burst 10 -j NFLOG --nflog-group 0 --nflog-prefix "ACCEPT "
 # -j LOG --log-prefix "iptables: ACCEPT " --log-level 4
@@ -56,15 +66,16 @@ iptables -A LOG_DROP -j DROP
 iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --set -m comment --comment "Limit SSH IN" # add ip to recent list with --set.
 iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j LOG_DROP -m comment --comment "Limit SSH IN"
 # Secondly, to make sure you don't lock yourself out from your server
-# you should add two allow ssh rules to iptables:
+# you should add two allow ssh rules to iptables first thing:
 iptables -A INPUT -p tcp -m tcp --dport 22 -j ACCEPT -m comment --comment "SSH IN"
 iptables -A OUTPUT -p tcp -m tcp --sport 22 -j ACCEPT -m comment --comment "SSH OUT"
 # These udp-ports are for Mosh which is an ssh wrapper software for
 # better responsiveness and roaming.
 iptables -A INPUT -p udp -m udp --dport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh UDP IN"
 iptables -A OUTPUT -p udp -m udp --sport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh UDP OUT"
-iptables -A INPUT -p tcp -m tcp --dport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh TCP IN"
-iptables -A OUTPUT -p tcp -m tcp --sport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh TCP OUT"
+#iptables -A INPUT -p tcp -m tcp --dport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh TCP IN"
+#iptables -A OUTPUT -p tcp -m tcp --sport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh TCP OUT"
+
 # Reject packets from RFC1918 class networks (i.e., spoofed)
 iptables -A INPUT -s 10.0.0.0/8     -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
 iptables -A INPUT -s 169.254.0.0/16 -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
@@ -87,17 +98,17 @@ iptables -A OUTPUT  -m state --state INVALID -j LOG_DROP -m comment --comment "I
 iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j LOG_DROP -m comment --comment "Bogus tcp packet type"
 iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j LOG_DROP -m comment --comment "Bogus tcp packet type"
 
-# These rules add scanners to the portscan list, and log the attempt.
+# These rules add scanners to the portscan list, and logs the attempt.
 #iptables -A INPUT   -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG --log-prefix "Portscan:"
 iptables -A INPUT   -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG_DROP -m comment --comment "Portscan"
 #iptables -A FORWARD -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG --log-prefix "Portscan:"
 iptables -A FORWARD -p tcp -m tcp --dport 139 -m recent --name portscan --set -j LOG_DROP -m comment --comment "Portscan"
 # Anyone who tried to portscan us is locked out for an entire day.
-iptables -A INPUT   -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP -m comment --comment "Portscan: locked out for a day."
-iptables -A FORWARD -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP -m comment --comment "Portscan: locked out for a day."
+iptables -A INPUT   -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP -m comment --comment "Portscan: locking out for a day."
+iptables -A FORWARD -m recent --name portscan --rcheck --seconds 86400 -j LOG_DROP -m comment --comment "Portscan: locking out for a day."
 # Once the day has passed, remove them from the portscan list
-iptables -A INPUT   -m recent --name portscan --remove -m comment --comment "Portscan: address removed from recent blocking-list."
-iptables -A FORWARD -m recent --name portscan --remove -m comment --comment "Portscan: address removed from recent blocking-list."
+iptables -A INPUT   -m recent --name portscan --remove -m comment --comment "Portscan: remove a locked-out address after a day."
+iptables -A FORWARD -m recent --name portscan --remove -m comment --comment "Portscan: remove a locked-out address after a day."
 
 # Allow three types of ICMP packets to be received (so people can
 # check our presence), but restrict the flow to avoid ping flood
@@ -121,6 +132,18 @@ iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synf
 # User connections: tcp ports for dns, browsing, email, XMR-mining at xmr.suprnova.cc:5221, bss_conn.c:246, and udp ports for ftp and DNS.
 iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
 iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
+
+cd $pwd
+case $1 in
+    "sslh") ./sslh-firewall-setup.sh ;;
+    "ipset") echo "running ./my-ipset-update.sh" && ./my-ipset-update.sh && ipset del Bogon 192.168.0.0/16 ;;
+    *) echo "No arguments given. Ok. Continuing."
+esac
+case $2 in
+    "sslh") ./sslh-firewall-setup.sh ;;
+    "ipset") echo "running ./my-ipset-update.sh" && ./my-ipset-update.sh && ipset del Bogon 192.168.0.0/16 ;;
+    *) echo "No second argument given. Ok. Continuing."    
+esac
 
 # Allow requests to our services.
 # Allow the following hosted services on top of SSH:
@@ -183,13 +206,26 @@ iptables -P OUTPUT DROP
 iptables -P FORWARD DROP 
 
 # Save configuration across network restarts and reboots.
-#/sbin/iptables-save > /etc/iptables.up.rules
+/sbin/iptables-save > /etc/iptables.up.rules
+if [[ $1 == sslh ]] || [[ $2 == sslh]] ; then
+cat <<EOT > /etc/network/if-pre-up.d/iptables
+#!/bin/bash
+/sbin/iptables-restore < /etc/iptables.up.rules
+# for sslh
+# avoid duplicate fwmark
+    if ! ip rule show | grep "fwmark 0x1 lookup 100" -q ; then ip rule add fwmark 0x1 lookup 100 ; fi
+    ip route add local 0.0.0.0/0 dev lo table 100
+EOT
+else
+cat <<EOT > /etc/network/if-pre-up.d/iptables
+#!/bin/bash
+/sbin/iptables-restore < /etc/iptables.up.rules
+# for sslh
+# avoid duplicate fwmark
+    if ! ip rule show | grep "fwmark 0x1 lookup 100" -q ; then ip rule add fwmark 0x1 lookup 100 ; fi
+    ip route add local 0.0.0.0/0 dev lo table 100
+EOT
+fi
 
-#cat <<EOT > /etc/network/if-pre-up.d/iptables
-##!/bin/bash
-#/sbin/iptables-restore < /etc/iptables.up.rules
-#
-#EOT
-#
-#chmod +x /etc/network/if-pre-up.d/iptables
+chmod +x /etc/network/if-pre-up.d/iptables
 

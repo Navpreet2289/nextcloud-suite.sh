@@ -57,15 +57,20 @@ importList(){
 	
 	# only create if the iptables rules don't already exist
 	if ! echo $IPTABLES|grep -q "\-A\ INPUT\ \-m\ set\ \-\-match\-set\ $1\ src\ \-\j\ DROP"; then
-          iptables -A INPUT -m set --match-set $1 src -j ULOG --ulog-prefix "Blocked input $1"
-          iptables -A FORWARD -m set --match-set $1 src -j ULOG --ulog-prefix "Blocked fwd $1"
-          iptables -A FORWARD -m set --match-set $1 dst -j ULOG --ulog-prefix "Blocked fwd $1"
-          iptables -A OUTPUT -m set --match-set $1 dst -j ULOG --ulog-prefix "Blocked out $1"
+#          iptables -A INPUT -m set --match-set $1 src -j ULOG --ulog-prefix "Blocked input $1"
+#          iptables -A FORWARD -m set --match-set $1 src -j ULOG --ulog-prefix "Blocked fwd $1"
+#          iptables -A FORWARD -m set --match-set $1 dst -j ULOG --ulog-prefix "Blocked fwd $1"
+#          iptables -A OUTPUT -m set --match-set $1 dst -j ULOG --ulog-prefix "Blocked out $1"
 
-	  iptables -A INPUT -m set --match-set $1 src -j DROP
-	  iptables -A FORWARD -m set --match-set $1 src -j DROP
-	  iptables -A FORWARD -m set --match-set $1 dst -j REJECT
-	  iptables -A OUTPUT -m set --match-set $1 dst -j REJECT
+#	  iptables -A INPUT -m set --match-set $1 src -j DROP
+#	  iptables -A FORWARD -m set --match-set $1 src -j DROP
+#	  iptables -A FORWARD -m set --match-set $1 dst -j REJECT
+#	  iptables -A OUTPUT -m set --match-set $1 dst -j REJECT
+# My change:
+	  iptables -A INPUT -m set --match-set $1 src -j LOG_DROP
+	  iptables -A FORWARD -m set --match-set $1 src -j LOG_DROP
+	  iptables -A FORWARD -m set --match-set $1 dst -j LOG_DROP
+	  iptables -A OUTPUT -m set --match-set $1 dst -j LOG_DROP
 	fi
   else
 	echo "List $1.txt does not exist."
