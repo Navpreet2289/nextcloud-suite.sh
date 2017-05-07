@@ -21,15 +21,19 @@
 # This software is based on another script, but most of it is different.
 # Credits to Guilhem Moulin who wrote https://git.fripost.org/fripost-ansible/tree/roles/common/files/usr/local/sbin/update-firewall.sh
 
-########################################
+################################################################################
 #
-# Example usage:
-# ./firewall-setup-server "sslh" "ipset"
+# Example usage (must be run from it's source directory):
+# iptables --flush && ./firewall-setup-server sslh ipset && systemctl restart openvpn-client@ovpn.service
 #
-########################################
+# Running with sslh option will assume local ssh source port 22 and
+# ssl source port 4443.
+################################################################################
 
 localif="eth0"
+pubif="tun0"
 pwd="$(pwd)"
+dontblock=192.168.0.0/16
 
 # localhost connections are always allowed (failure to allow this will
 # break many programs which rely on localhost)
@@ -76,19 +80,27 @@ iptables -A OUTPUT -p udp -m udp --sport 60000:61000 -j LOG_ACCEPT -m comment --
 #iptables -A INPUT -p tcp -m tcp --dport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh TCP IN"
 #iptables -A OUTPUT -p tcp -m tcp --sport 60000:61000 -j LOG_ACCEPT -m comment --comment "Mosh TCP OUT"
 
+# Enable outputs on OpenVPN interface (change tun0 to tap0 or any
+# other openvpn interface you might be using) and enable port for
+# establishing VPN. Check your /etc/openvpn/client.conf for protocol
+# and port numbers.
+#iptables -A OUTPUT --out-interface tun0 -j LOG_ACCEPT 
+iptables -A OUTPUT -p udp --dport 1196 -j LOG_ACCEPT -m comment --comment "OVPN"
+iptables -A OUTPUT -p udp --dport 1197 -j LOG_ACCEPT -m comment --comment "OVPN"
+
 # Reject packets from RFC1918 class networks (i.e., spoofed)
-iptables -A INPUT -s 10.0.0.0/8     -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -s 169.254.0.0/16 -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -s 172.16.0.0/12  -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -s 127.0.0.0/8    -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -s 224.0.0.0/4      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -d 224.0.0.0/4      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -s 240.0.0.0/5      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -d 240.0.0.0/5      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -s 0.0.0.0/8        -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -d 0.0.0.0/8        -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -d 239.255.255.0/24 -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
-iptables -A INPUT -d 255.255.255.255  -j LOG_DROP -m comment --comment "RFC1918 class network - spoofing"
+iptables -A INPUT -s 10.0.0.0/8     -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -s 169.254.0.0/16 -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -s 172.16.0.0/12  -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -s 127.0.0.0/8    -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -s 224.0.0.0/4      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -d 224.0.0.0/4      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -s 240.0.0.0/5      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -d 240.0.0.0/5      -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -s 0.0.0.0/8        -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -d 0.0.0.0/8        -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -d 239.255.255.0/24 -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
+iptables -A INPUT -d 255.255.255.255  -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
 
 # Drop invalid packets immediately
 iptables -A INPUT   -m state --state INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
@@ -133,17 +145,64 @@ iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synf
 iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
 iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
 
+# Optional setups
+f_do_ipsetSetup(){
+cat <<EOF > /lib/systemd/system/ipset.service
+[Unit]
+Description=Loading IP Sets
+Before=network-pre.target iptables.service ip6tables.service ufw.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ipset -f /etc/ipset.conf restore
+ExecReload=/sbin/ipset -f /etc/ipset.conf restore
+ExecStop=/sbin/ipset destroy
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo "running ./my-ipset-update.sh. May take some time."
+./my-ipset-update.sh
+ipset del Bogon $dontblock
+ipset save > /etc/ipset.conf
+systemctl daemon-reload
+systemctl enable ipset
+echo "finished ipsetSetup"
+}
+
+f_do_sslhSetup(){
+    #SSLH SETUP
+    # not used
+    #localsship=192.168.1.10
+    echo "Assuming you have sslh installed and setup; with local ssh source port 22 and ssl source port 4443."
+    iptables -t mangle -N SSLH
+    # This host receives incoming connections on it's public IP that's on tun0 (VPN).
+    iptables -t mangle -I OUTPUT --protocol tcp --out-interface $pubif --sport 22 --jump SSLH
+    iptables -t mangle -I OUTPUT --protocol tcp --out-interface $pubif --sport 4443 --jump SSLH
+    #iptables -t mangle -I OUTPUT --protocol tcp --sport 4443 --jump SSLH
+    #iptables -t mangle -I SSLH  --protocol tcp -d $localsship --sport 22 --jump ACCEPT
+    #iptables -t mangle -I SSLH  --protocol tcp -s $localsship --jump ACCEPT
+    iptables -t mangle -A SSLH --jump MARK --set-mark 0x1
+    iptables -t mangle -A SSLH --jump ACCEPT
+    # avoid duplicate fwmark
+    if ! ip rule show | grep "fwmark 0x1 lookup 100" -q ; then ip rule add fwmark 0x1 lookup 100 ; fi
+    ip route add local 0.0.0.0/0 dev lo table 100
+    echo "finished sslhSetup"
+}
 cd $pwd
 case $1 in
-    "sslh") ./sslh-firewall-setup.sh ;;
-    "ipset") echo "running ./my-ipset-update.sh" && ./my-ipset-update.sh && ipset del Bogon 192.168.0.0/16 ;;
+    "sslh") f_do_sslhSetup ;;
+    "ipset") f_do_ipsetSetup ;;
     *) echo "No arguments given. Ok. Continuing."
 esac
 case $2 in
-    "sslh") ./sslh-firewall-setup.sh ;;
-    "ipset") echo "running ./my-ipset-update.sh" && ./my-ipset-update.sh && ipset del Bogon 192.168.0.0/16 ;;
+    "sslh") f_do_sslhSetup ;;
+    "ipset") f_do_ipsetSetup ;;
     *) echo "No second argument given. Ok. Continuing."    
 esac
+
 
 # Allow requests to our services.
 # Allow the following hosted services on top of SSH:
@@ -175,14 +234,6 @@ iptables -A OUTPUT -p tcp --match multiport --dports 80,443,587,465,25,143,993,1
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
 
-# Enable outputs on OpenVPN interface (change tun0 to tap0 or any
-# other openvpn interface you might be using) and enable port for
-# establishing VPN. Check your /etc/openvpn/client.conf for protocol
-# and port numbers.
-#iptables -A OUTPUT --out-interface tun0 -j LOG_ACCEPT 
-iptables -A OUTPUT -p udp --dport 1196 -j LOG_ACCEPT -m comment --comment "OVPN"
-iptables -A OUTPUT -p udp --dport 1197 -j LOG_ACCEPT -m comment --comment "OVPN"
-
 # No need to use for-loop as below anymore since iptables have multiport option (although max 15 entries).
 #for SERVICE in '53' '80' '443' '587' '465' '25' '143' '993' '110' '995' '4190' '8443' '3478' ; do
 #    iptables -A INPUT -p tcp -m tcp -d $OURIP --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
@@ -207,23 +258,20 @@ iptables -P FORWARD DROP
 
 # Save configuration across network restarts and reboots.
 /sbin/iptables-save > /etc/iptables.up.rules
-if [[ $1 == sslh ]] || [[ $2 == sslh]] ; then
+if [[ $1 == "sslh" ]] || [[ $2 == "sslh" ]] ; then
 cat <<EOT > /etc/network/if-pre-up.d/iptables
 #!/bin/bash
 /sbin/iptables-restore < /etc/iptables.up.rules
 # for sslh
 # avoid duplicate fwmark
-    if ! ip rule show | grep "fwmark 0x1 lookup 100" -q ; then ip rule add fwmark 0x1 lookup 100 ; fi
-    ip route add local 0.0.0.0/0 dev lo table 100
+if ! ip rule show | grep "fwmark 0x1 lookup 100" -q ; then ip rule add fwmark 0x1 lookup 100 ; fi
+ip route add local 0.0.0.0/0 dev lo table 100
 EOT
 else
 cat <<EOT > /etc/network/if-pre-up.d/iptables
 #!/bin/bash
 /sbin/iptables-restore < /etc/iptables.up.rules
-# for sslh
-# avoid duplicate fwmark
-    if ! ip rule show | grep "fwmark 0x1 lookup 100" -q ; then ip rule add fwmark 0x1 lookup 100 ; fi
-    ip route add local 0.0.0.0/0 dev lo table 100
+
 EOT
 fi
 
