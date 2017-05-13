@@ -24,6 +24,8 @@
 ################################################################################
 #
 # Example usage (must be run from it's source directory):
+# in case of running local nameserver: echo "nameserver 46.227.67.134" >> /etc/resolv.conf first
+# or the ovpn connection might not be restorable.
 # iptables --flush && ./firewall-setup-server sslh ipset && systemctl restart openvpn-client@ovpn.service
 #
 # Running with sslh option will assume local ssh source port 22 and
@@ -277,5 +279,5 @@ cat <<EOT > /etc/network/if-pre-up.d/iptables
 EOT
 fi
 
-chmod +x /etc/network/if-pre-up.d/iptables
+chmod u+x /etc/network/if-pre-up.d/iptables
 
