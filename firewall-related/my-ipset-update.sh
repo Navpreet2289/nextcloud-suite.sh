@@ -28,9 +28,10 @@ removeOldLists(){
     
     [ -f $LISTDIR/abuseipdb.txt ] && rm $LISTDIR/abuseipdb.txt
 }
+removeOldLists
 
 # enable bluetack lists?
-ENABLE_BLUETACK=0
+ENABLE_BLUETACK=1
 
 # enable country blocks?
 ENABLE_COUNTRY=0
@@ -158,7 +159,7 @@ f_do_GetPages(){
     done
 }
 if [ $ENABLE_ABUSEIPDB = 1 ]; then
-    #f_do_GetPages "$LISTDIR/abuseipdb.txt"
+    f_do_GetPages "$LISTDIR/abuseipdb.txt"
     importList "abuseipdb" 0
 fi
 
