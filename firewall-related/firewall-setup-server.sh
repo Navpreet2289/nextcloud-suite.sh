@@ -32,8 +32,8 @@
 # ssl source port 4443.
 ################################################################################
 
-localif="eth0"
-pubif="tun0"
+lan="eth0"
+wan="tun0"
 pwd="$(pwd)"
 dontblock=192.168.0.0/16
 
@@ -186,8 +186,8 @@ f_do_sslhSetup(){
     echo "Assuming you have sslh installed and setup; with local ssh source port 22 and ssl source port 4443."
     iptables -t mangle -N SSLH
     # This host receives incoming connections on it's public IP that's on tun0 (VPN).
-    iptables -t mangle -I OUTPUT --protocol tcp --out-interface $pubif --sport 22 --jump SSLH
-    iptables -t mangle -I OUTPUT --protocol tcp --out-interface $pubif --sport 4443 --jump SSLH
+    iptables -t mangle -I OUTPUT --protocol tcp --out-interface $wan --sport 22 --jump SSLH
+    iptables -t mangle -I OUTPUT --protocol tcp --out-interface $wan --sport 4443 --jump SSLH
     #iptables -t mangle -I OUTPUT --protocol tcp --sport 4443 --jump SSLH
     #iptables -t mangle -I SSLH  --protocol tcp -d $localsship --sport 22 --jump ACCEPT
     #iptables -t mangle -I SSLH  --protocol tcp -s $localsship --jump ACCEPT
@@ -227,10 +227,12 @@ iptables -A INPUT -p tcp --match multiport --dports 53,80,443,587,465,25,143,993
 iptables -A INPUT -p tcp --match multiport --dports 9418 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection"
 iptables -A INPUT -p udp --match multiport --dports 9418 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection"
 # Allow local udp port 5353 for multicast DNS on local network port (avahi-daemon)
-iptables -A INPUT -p udp --in-interface ${localif} --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
+if [[ -z $lan ]] ; then
+    iptables -A INPUT -p udp --in-interface ${lan} --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
+    # Allow local outgoing multicast DNS connections
+    iptables -A OUTPUT -p udp --out-interface ${lan} -d 224.0.0.251 --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
+fi
 
-# Allow local outgoing multicast DNS connections
-iptables -A OUTPUT -p udp --out-interface ${localif} -d 224.0.0.251 --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
 # Specifically allow outgoing established connections from our services. (This should be taken care of automatically by above statement)
 iptables -A OUTPUT -p udp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m conntrack --ctstate ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
 iptables -A OUTPUT -p tcp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m conntrack --ctstate ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"

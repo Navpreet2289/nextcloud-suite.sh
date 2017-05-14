@@ -74,8 +74,9 @@ BLUETACK=(xpbqleszmajjesnzddhv lujdnbasfaaixitgmxpp usrcshglbiilevmyfhse zbdlwrq
 PORTS=(80 443 6667 22 21)
 
 # See https://github.com/firehol/blocklist-ipsets for sets. There's
-# some overlap with bluetack lists - make sure not to duplicate.
-FIREHOL_LIST=(alienvault_reputation atlas_botnets urlvir)
+# some overlap with bluetack lists - make sure not to duplicate. For
+# Don't use the openbl list, idk where the ip's for that list are.
+FIREHOL_LIST=(feodo sslbl zeus_badips spamhaus_drop spamhaus_edrop blocklist_de)
 # -------------------------------------------------------- #
 # Script-code below
 # -------------------------------------------------------- #
@@ -86,7 +87,7 @@ removeOldLists(){
     # remove the old tor node list
     [ -f $LISTDIR/tor.txt ] && rm $LISTDIR/tor.txt
     
-    [ -f $LISTDIR/abuseipdb.txt ] && rm $LISTDIR/abuseipdb.txt
+    rm $LISTDIR/*.txt
 }
 removeOldLists
 
@@ -134,29 +135,21 @@ importList(){
 }
 
 if [ $ENABLE_BLUETACK = 1 ]; then
-  # get, parse, and import the bluetack lists they are special in that
-  # they are gz compressed and require pg2ipset to be inserted
-    installPG2IPSET(){ # install instructions from pg2ipset github page.
-	mkdir -p $USER/bin
-	git clone https://github.com/ilikenwf/pg2ipset $USER/bin
-    	cd pg2ipset
-	if [[ $USER == "root" ]] ; then
-	    make
-	else
-	    make build && make install
-	fi
-	export PATH=${PATH}:/$USER/bin/pg2ipset
-    }
-    if ! which pg2ipset ; then installPG2IPSET ; fi
-    i=0
-    for list in ${BLUETACK[@]}; do
+  # get, parse, and import the bluetack lists
+  # they are special in that they are gz compressed and require
+  # pg2ipset to be inserted
+  i=0
+  for list in ${BLUETACK[@]}; do  
 	if [ eval $(wget --quiet -O /tmp/${BLUETACKALIAS[i]}.gz http://list.iblocklist.com/?list=$list&fileformat=p2p&archiveformat=gz) ]; then
-	    mv /tmp/${BLUETACKALIAS[i]}.gz $LISTDIR/${BLUETACKALIAS[i]}.gz
+	  mv /tmp/${BLUETACKALIAS[i]}.gz $LISTDIR/${BLUETACKALIAS[i]}.gz
 	else
-	    echo "Using cached list for ${BLUETACKALIAS[i]}."
+	  echo "Using cached list for ${BLUETACKALIAS[i]}."
 	fi
+	
 	echo "Importing bluetack list ${BLUETACKALIAS[i]}..."
-  	importList ${BLUETACKALIAS[i]} 1
+  
+	importList ${BLUETACKALIAS[i]} 1
+	
 	i=$((i+1))
   done
 fi
@@ -192,20 +185,27 @@ fi
 # ex: importTextList "custom"
 
 if [ $ENABLE_FIREHOL = 1 ]; then
-    echo "Downloading and parsing ip sets from https://github.com/firehol/blocklist-ipsets/..."    
     if [[ -d $LISTDIR/firehol ]] ; then
-	cd $LISTDIR/firehol
-	git pull https://github.com/firehol/blocklist-ipsets $LISTDIR/firehol
+	cd $LISTDIR/firehol    
+	git pull https://github.com/firehol/blocklist-ipsets
     else
 	git clone https://github.com/firehol/blocklist-ipsets $LISTDIR/firehol
+	cd $LISTDIR/firehol    	
     fi
     for list in ${FIREHOL_LIST[@]}; do
 	# get the url from the .json files in the git clone directory.
-	wget $(grep file_local ${list}.json --quiet | awk 'BEGIN {FS="\"" } { print $4 }')
-	# importList wants .txt extensions in $LIST directory.
-	grep -E "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" $LISTDIR/firehol/${list}.ipset > $LISTDIR/${list}.txt
-	importList ${list} 0
+	wget --quiet $(grep file_local $LISTDIR/firehol/${list}.json | awk 'BEGIN {FS="\"" } { print $4 }')
+	# importList function wants .txt extensions in $LIST directory.
+	if [[ -f $LISTDIR/firehol/${list}.netset ]] ; then
+	    grep -E "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/*[0-9]*" $LISTDIR/firehol/${list}.netset > $LISTDIR/${list}.txt
+	    rm $LISTDIR/firehol/${list}.netset
+	elif [[ -f $LISTDIR/firehol/${list}.ipset ]] ; then
+	    grep -E "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/*[0-9]*" $LISTDIR/firehol/${list}.ipset > $LISTDIR/${list}.txt
+	    rm $LISTDIR/firehol/${list}.ipset
+	fi
+	importList ${list} 0	
     done;
+    cd -
 fi
 
 # Downloads ip-lists pages from the abuseipdb website and parses the
@@ -232,7 +232,7 @@ f_do_AbuseIPDB(){
     done
 }
 if [ $ENABLE_ABUSEIPDB = 1 ]; then
-    echo "Downloading and parsing ip sets from https://www.abuseipdb.com/..."
+    echo "Downloading and parsing ip sets from https://www.abuseipdb.com/"
     f_do_AbuseIPDB "$LISTDIR/abuseipdb.txt"
     importList "abuseipdb" 0
 fi
