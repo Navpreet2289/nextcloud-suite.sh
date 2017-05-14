@@ -1,40 +1,45 @@
 #!/bin/bash
 
+# -------------------------------------------------------- #
 # ipset-update.sh (C) 2012-2015 Matt Parnell http://www.mattparnell.com
 # Licensed under the GNU-GPLv2+
+# -------------------------------------------------------- #
 
-# place to keep our cached blocklists
-LISTDIR="/var/cache/blocklists"
+# -------------------------------------------------------- #
+# Copyright © 2017 David Larsson <david.larsson@selfhosted.xyz>
+#
+# This file is part of Nextcloud-Suite.sh.
+# 
+# Nextcloud-Suite.sh is free software: you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+# 
+# Nextcloud-Suite.sh is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Nextcloud-Suite.sh.  If not, see
+# <http://www.gnu.org/licenses/>.
+# -------------------------------------------------------- #
 
-# create cache directory for our lists if it isn't there
-[ ! -d $LISTDIR ] && mkdir $LISTDIR
-
-# countries to block, must be lcase
-COUNTRIES=(af ae ir iq tr cn sa sy ru ua hk id kz kw ly)
-
-# bluetack lists to use - they now obfuscate these so get them from
-# https://www.iblocklist.com/lists.php
-BLUETACKALIAS=(DShield Bogon Hijacked DROP ForumSpam WebExploit Ads Proxies BadSpiders CruzIT Zeus Palevo Malicious Malcode Adservers level1 level2 level3)
-BLUETACK=(xpbqleszmajjesnzddhv lujdnbasfaaixitgmxpp usrcshglbiilevmyfhse zbdlwrqkabxbcppvrnos ficutxiwawokxlcyoeye ghlzqtqxnzctvvajwwag dgxtneitpuvgqqcpfulq xoebmbyexwuiogmbyprb mcvxsnihddgutbjfbghy czvaehmjpsnwwttrdoyl ynkdjqsjyfmilsgbogqf erqajhwrxiuvjxqrrwfj npkuuhuxcsllnhoamkvm pbqcylkejciyhmwttify zhogegszwduurnvsyhdf ydxerpxkpcfqjaybcssw gyisgnzbhppbvsphucsw uwnukjqktoggdknzrhgh) 
-# ports to block tor users from
-PORTS=(80 443 6667 22 21)
-
-# See https://github.com/firehol/blocklist-ipsets for sets. There's
-# some overlap with bluetack lists - make sure not to duplicate.
-
-FIREHOL_LIST=(alienvault_reputation atlas_botnets urlvir)
-
-removeOldLists(){
-    # remove old countries list
-    [ -f $LISTDIR/countries.txt ] && rm $LISTDIR/countries.txt
-
-    # remove the old tor node list
-    [ -f $LISTDIR/tor.txt ] && rm $LISTDIR/tor.txt
-    
-    [ -f $LISTDIR/abuseipdb.txt ] && rm $LISTDIR/abuseipdb.txt
-}
-#removeOldLists
-
+# -------------------------------------------------------- #
+#
+# This script downloads, parses and installs selected ipset blocklists
+# from:
+#
+# -  https://www.iblocklist.com/lists.php
+# -  https://check.torproject.org/cgi-bin/TorBulkExitList.py?ip=$ip&port=$port
+# -  http://www.ipdeny.com/ipblocks/data/countries/$country.zone
+# -  My additions:
+# -  https://www.abuseipdb.com/
+# -  https://github.com/firehol/blocklist-ipsets
+#
+# -------------------------------------------------------- #
+# ENABLE DEFAULT OPTIONS HERE
+# -------------------------------------------------------- #
 # enable bluetack lists?
 ENABLE_BLUETACK=1
 
@@ -49,6 +54,41 @@ ENABLE_ABUSEIPDB=1
 
 # enable firehol lists?
 ENABLE_FIREHOL=1
+# -------------------------------------------------------- #
+# SPECIFY OPTIONS HERE
+# -------------------------------------------------------- #
+# place to keep our cached blocklists
+LISTDIR="/var/cache/blocklists"
+
+# create cache directory for our lists if it isn't there
+[ ! -d $LISTDIR ] && mkdir $LISTDIR
+
+# countries to block, must be lcase
+COUNTRIES=(af ae ir iq tr cn sa sy ru ua hk id kz kw ly)
+
+# bluetack lists to use - they now obfuscate these so get the BLUETACK
+# part from https://www.iblocklist.com/lists.php
+BLUETACKALIAS=(DShield Bogon Hijacked DROP ForumSpam WebExploit Ads Proxies BadSpiders CruzIT Zeus Palevo Malicious Malcode Adservers level1 level2 level3)
+BLUETACK=(xpbqleszmajjesnzddhv lujdnbasfaaixitgmxpp usrcshglbiilevmyfhse zbdlwrqkabxbcppvrnos ficutxiwawokxlcyoeye ghlzqtqxnzctvvajwwag dgxtneitpuvgqqcpfulq xoebmbyexwuiogmbyprb mcvxsnihddgutbjfbghy czvaehmjpsnwwttrdoyl ynkdjqsjyfmilsgbogqf erqajhwrxiuvjxqrrwfj npkuuhuxcsllnhoamkvm pbqcylkejciyhmwttify zhogegszwduurnvsyhdf ydxerpxkpcfqjaybcssw gyisgnzbhppbvsphucsw uwnukjqktoggdknzrhgh) 
+# ports to block tor users from
+PORTS=(80 443 6667 22 21)
+
+# See https://github.com/firehol/blocklist-ipsets for sets. There's
+# some overlap with bluetack lists - make sure not to duplicate.
+FIREHOL_LIST=(alienvault_reputation atlas_botnets urlvir)
+# -------------------------------------------------------- #
+# Script-code below
+# -------------------------------------------------------- #
+removeOldLists(){
+    # remove old countries list
+    [ -f $LISTDIR/countries.txt ] && rm $LISTDIR/countries.txt
+
+    # remove the old tor node list
+    [ -f $LISTDIR/tor.txt ] && rm $LISTDIR/tor.txt
+    
+    [ -f $LISTDIR/abuseipdb.txt ] && rm $LISTDIR/abuseipdb.txt
+}
+removeOldLists
 
 #cache a copy of the iptables rules
 IPTABLES=$(iptables-save)
@@ -94,21 +134,29 @@ importList(){
 }
 
 if [ $ENABLE_BLUETACK = 1 ]; then
-  # get, parse, and import the bluetack lists
-  # they are special in that they are gz compressed and require
-  # pg2ipset to be inserted
-  i=0
-  for list in ${BLUETACK[@]}; do  
-	if [ eval $(wget --quiet -O /tmp/${BLUETACKALIAS[i]}.gz http://list.iblocklist.com/?list=$list&fileformat=p2p&archiveformat=gz) ]; then
-	  mv /tmp/${BLUETACKALIAS[i]}.gz $LISTDIR/${BLUETACKALIAS[i]}.gz
+  # get, parse, and import the bluetack lists they are special in that
+  # they are gz compressed and require pg2ipset to be inserted
+    installPG2IPSET(){ # install instructions from pg2ipset github page.
+	mkdir -p $USER/bin
+	git clone https://github.com/ilikenwf/pg2ipset $USER/bin
+    	cd pg2ipset
+	if [[ $USER == "root" ]] ; then
+	    make
 	else
-	  echo "Using cached list for ${BLUETACKALIAS[i]}."
+	    make build && make install
 	fi
-	
+	export PATH=${PATH}:/$USER/bin/pg2ipset
+    }
+    if ! which pg2ipset ; then installPG2IPSET ; fi
+    i=0
+    for list in ${BLUETACK[@]}; do
+	if [ eval $(wget --quiet -O /tmp/${BLUETACKALIAS[i]}.gz http://list.iblocklist.com/?list=$list&fileformat=p2p&archiveformat=gz) ]; then
+	    mv /tmp/${BLUETACKALIAS[i]}.gz $LISTDIR/${BLUETACKALIAS[i]}.gz
+	else
+	    echo "Using cached list for ${BLUETACKALIAS[i]}."
+	fi
 	echo "Importing bluetack list ${BLUETACKALIAS[i]}..."
-  
-	importList ${BLUETACKALIAS[i]} 1
-	
+  	importList ${BLUETACKALIAS[i]} 1
 	i=$((i+1))
   done
 fi
