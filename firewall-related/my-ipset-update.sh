@@ -19,20 +19,27 @@ BLUETACK=(xpbqleszmajjesnzddhv lujdnbasfaaixitgmxpp usrcshglbiilevmyfhse zbdlwrq
 # ports to block tor users from
 PORTS=(80 443 6667 22 21)
 
-# remove old countries list
-[ -f $LISTDIR/countries.txt ] && rm $LISTDIR/countries.txt
+removeOldLists(){
+    # remove old countries list
+    [ -f $LISTDIR/countries.txt ] && rm $LISTDIR/countries.txt
 
-# remove the old tor node list
-[ -f $LISTDIR/tor.txt ] && rm $LISTDIR/tor.txt
+    # remove the old tor node list
+    [ -f $LISTDIR/tor.txt ] && rm $LISTDIR/tor.txt
+    
+    [ -f $LISTDIR/abuseipdb.txt ] && rm $LISTDIR/abuseipdb.txt
+}
 
 # enable bluetack lists?
-ENABLE_BLUETACK=1
+ENABLE_BLUETACK=0
 
 # enable country blocks?
 ENABLE_COUNTRY=0
 
 # enable tor blocks?
 ENABLE_TORBLOCK=0
+
+# enable abuseipdb?
+ENABLE_ABUSEIPDB=1
 
 #cache a copy of the iptables rules
 IPTABLES=$(iptables-save)
@@ -56,7 +63,7 @@ importList(){
 	ipset destroy $1-TMP &> /dev/null
 	
 	# only create if the iptables rules don't already exist
-	if ! echo $IPTABLES|grep -q "\-A\ INPUT\ \-m\ set\ \-\-match\-set\ $1\ src\ \-\j\ DROP"; then
+	if ! echo $IPTABLES|grep -q "\-A\ INPUT\ \-m\ set\ \-\-match\-set\ $1\ src\ \-\j\ LOG_DROP"; then
 #          iptables -A INPUT -m set --match-set $1 src -j ULOG --ulog-prefix "Blocked input $1"
 #          iptables -A FORWARD -m set --match-set $1 src -j ULOG --ulog-prefix "Blocked fwd $1"
 #          iptables -A FORWARD -m set --match-set $1 dst -j ULOG --ulog-prefix "Blocked fwd $1"
@@ -126,4 +133,33 @@ fi
 
 # add any custom import lists below
 # ex: importTextList "custom"
+
+# Downloads ip-lists pages from the abuseipdb website and parses the
+# html file for the addresses and saves them into a file with the name
+# of the first argument the script is invoked with.
+
+f_do_GetPages(){ 
+    for i in {1..100} ; do
+	# avoid getting caught by potential syn-flood firewall-filter.
+	sleep 1 && wget https://www.abuseipdb.com/sitemap?page=$i
+
+	# Break loop when we get to a page without ip-addresses.
+	# This string is only on non-empty pages.
+	if ! ( grep -q "<div class=\"col-md-2\">" "sitemap?page=$i" ) ; then
+	    rm "sitemap?page=$i"
+	    echo "Reached last page with ip-addresses at abuseipdb.com"
+	    break
+	fi
+
+	# Append ip-addresses to a line-separated file.
+	grep -E "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" "sitemap?page=$i" | cut -c 45-59 | sed 's/\".*//g' >>"$1"
+	# clean up
+	rm "sitemap?page=$i"
+    done
+}
+if [ $ENABLE_ABUSEIPDB = 1 ]; then
+    #f_do_GetPages "$LISTDIR/abuseipdb.txt"
+    importList "abuseipdb" 0
+fi
+
 
