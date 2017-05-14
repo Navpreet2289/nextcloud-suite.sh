@@ -37,6 +37,11 @@ pubif="tun0"
 pwd="$(pwd)"
 dontblock=192.168.0.0/16
 
+iptables -P OUTPUT -j ACCEPT
+iptables --flush
+iptables -I INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+iptables -P INPUT DROP
+
 # localhost connections are always allowed (failure to allow this will
 # break many programs which rely on localhost)
 iptables -A INPUT -i lo -j ACCEPT
@@ -69,8 +74,8 @@ iptables -A LOG_DROP -j DROP
 
 # Defend against brute-force attempts on ssh-port. -I flag to place at
 # top of chain.
-iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --set -m comment --comment "Limit SSH IN" # add ip to recent list with --set.
-iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j LOG_DROP -m comment --comment "Limit SSH IN"
+iptables -A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --set -m comment --comment "Limit SSH IN" # add ip to recent list with --set.
+iptables -A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --update --seconds 60 --hitcount 10 -j LOG_DROP -m comment --comment "Limit SSH IN"
 # Secondly, to make sure you don't lock yourself out from your server
 # you should add two allow ssh rules to iptables first thing:
 iptables -A INPUT -p tcp -m tcp --dport 22 -j ACCEPT -m comment --comment "SSH IN"
@@ -105,9 +110,9 @@ iptables -A INPUT -d 239.255.255.0/24 -j LOG_DROP -m comment --comment "RFC1918 
 iptables -A INPUT -d 255.255.255.255  -j LOG_DROP -m comment --comment "RFC1918 class network - spoofed address"
 
 # Drop invalid packets immediately
-iptables -A INPUT   -m state --state INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
-iptables -A FORWARD -m state --state INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
-iptables -A OUTPUT  -m state --state INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
+iptables -A INPUT   -m conntrack --ctstate INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
+iptables -A FORWARD -m conntrack --ctstate INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
+iptables -A OUTPUT  -m conntrack --ctstate INVALID -j LOG_DROP -m comment --comment "INVALID packet type"
 # Drop bogus TCP packets
 iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j LOG_DROP -m comment --comment "Bogus tcp packet type"
 iptables -A INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j LOG_DROP -m comment --comment "Bogus tcp packet type"
@@ -140,12 +145,12 @@ done
 # connections from any host to 60 per second.  This does *not* do rate
 # limiting overall, because then someone could easily shut us down by
 # saturating the limit.
-iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --set
-iptables -A INPUT -m state --state NEW -p tcp -m tcp --syn -m recent --name synflood --update --seconds 1 --hitcount 60 -j LOG_DROP -m comment --comment "synflood-protection"
+iptables -A INPUT -m conntrack --ctstate NEW -p tcp -m tcp --syn -m recent --name synflood --set
+iptables -A INPUT -m conntrack --ctstate NEW -p tcp -m tcp --syn -m recent --name synflood --update --seconds 1 --hitcount 60 -j LOG_DROP -m comment --comment "synflood-protection"
 
 # User connections: tcp ports for dns, browsing, email, XMR-mining at xmr.suprnova.cc:5221, bss_conn.c:246, and udp ports for ftp and DNS.
-iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
-iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
+iptables -A OUTPUT -p udp --match multiport --dports 21,53 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
+iptables -A OUTPUT -p tcp --match multiport --dports 22,53,80,443,246,5221 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "user-connection"
 
 # Optional setups
 f_do_ipsetSetup(){
@@ -217,39 +222,39 @@ esac
 # 9980=LibreOffice Online websocket daemon.
 # 9418=git with git-daemon
 # 1935=rtmp ports for video streaming, 554=RSTP for streaming.
-iptables -A INPUT -p udp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-request" 
-iptables -A INPUT -p tcp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-request"
-iptables -A INPUT -p tcp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection"
-iptables -A INPUT -p udp --match multiport --dports 9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection"
+iptables -A INPUT -p udp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-request" 
+iptables -A INPUT -p tcp --match multiport --dports 53,80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-request"
+iptables -A INPUT -p tcp --match multiport --dports 9418 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection"
+iptables -A INPUT -p udp --match multiport --dports 9418 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection"
 # Allow local udp port 5353 for multicast DNS on local network port (avahi-daemon)
 iptables -A INPUT -p udp --in-interface ${localif} --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
 
 # Allow local outgoing multicast DNS connections
 iptables -A OUTPUT -p udp --out-interface ${localif} -d 224.0.0.251 --dport 5353 -j LOG_ACCEPT -m comment --comment "multicast-dns"
 # Specifically allow outgoing established connections from our services. (This should be taken care of automatically by above statement)
-iptables -A OUTPUT -p udp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
-iptables -A OUTPUT -p tcp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
+iptables -A OUTPUT -p udp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m conntrack --ctstate ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
+iptables -A OUTPUT -p tcp --match multiport --sports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m conntrack --ctstate ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
 # Allow opening new connections on these same services from server.
-iptables -A OUTPUT -p udp --match multiport --dports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
-iptables -A OUTPUT -p udp --dport 123 --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "ntp - network time protocol"
-iptables -A OUTPUT -p tcp --match multiport --dports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m state --state NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
+iptables -A OUTPUT -p udp --match multiport --dports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
+iptables -A OUTPUT -p udp --dport 123 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "ntp - network time protocol"
+iptables -A OUTPUT -p tcp --match multiport --dports 80,443,587,465,25,143,993,110,995,4190,8443,3478,5349,9980,9418 -m conntrack --ctstate NEW,ESTABLISHED -j LOG_ACCEPT -m comment --comment "service-connection-reply"
 
 # Allow everything auto-identified as a related connection:
-iptables -A INPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j LOG_ACCEPT 
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j LOG_ACCEPT 
+iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j LOG_ACCEPT 
 
 # No need to use for-loop as below anymore since iptables have multiport option (although max 15 entries).
 #for SERVICE in '53' '80' '443' '587' '465' '25' '143' '993' '110' '995' '4190' '8443' '3478' ; do
-#    iptables -A INPUT -p tcp -m tcp -d $OURIP --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
-#    iptables -A OUTPUT -p tcp -m tcp -s $OURIP --sport $SERVICE -m state --state ESTABLISHED -j ACCEPT
-#    iptables -A OUTPUT -s $OURIP -p udp -m udp --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
-#    iptables -A INPUT -d $OURIP -p udp -m udp --sport $SERVICE -m state --state ESTABLISHED -j ACCEPT    
+#    iptables -A INPUT -p tcp -m tcp -d $OURIP --dport $SERVICE -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+#    iptables -A OUTPUT -p tcp -m tcp -s $OURIP --sport $SERVICE -m conntrack --ctstate ESTABLISHED -j ACCEPT
+#    iptables -A OUTPUT -s $OURIP -p udp -m udp --dport $SERVICE -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+#    iptables -A INPUT -d $OURIP -p udp -m udp --sport $SERVICE -m conntrack --ctstate ESTABLISHED -j ACCEPT    
 #done 
 #for SERVICE in '53' '80' '443' '587' '465' '25' '143' '993' '110' '995' '4190' '8443' '3478' ; do
-#    iptables -A OUTPUT -s $OURIP -p tcp -m tcp --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
-#    iptables -A INPUT -d $OURIP -p tcp -m tcp --sport $SERVICE -m state --state ESTABLISHED -j ACCEPT
-#    iptables -A OUTPUT -s $OURIP -p udp -m udp --dport $SERVICE -m state --state NEW,ESTABLISHED -j ACCEPT
-#    iptables -A INPUT -d $OURIP -p udp -m udp --sport $SERVICE -m state --state ESTABLISHED -j ACCEPT    
+#    iptables -A OUTPUT -s $OURIP -p tcp -m tcp --dport $SERVICE -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+#    iptables -A INPUT -d $OURIP -p tcp -m tcp --sport $SERVICE -m conntrack --ctstate ESTABLISHED -j ACCEPT
+#    iptables -A OUTPUT -s $OURIP -p udp -m udp --dport $SERVICE -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+#    iptables -A INPUT -d $OURIP -p udp -m udp --sport $SERVICE -m conntrack --ctstate ESTABLISHED -j ACCEPT    
 #done 
 
 # Log and drop all packages which are not specifically allowed.

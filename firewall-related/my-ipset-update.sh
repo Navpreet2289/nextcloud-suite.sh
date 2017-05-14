@@ -19,6 +19,11 @@ BLUETACK=(xpbqleszmajjesnzddhv lujdnbasfaaixitgmxpp usrcshglbiilevmyfhse zbdlwrq
 # ports to block tor users from
 PORTS=(80 443 6667 22 21)
 
+# See https://github.com/firehol/blocklist-ipsets for sets. There's
+# some overlap with bluetack lists - make sure not to duplicate.
+
+FIREHOL_LIST=(alienvault_reputation atlas_botnets urlvir)
+
 removeOldLists(){
     # remove old countries list
     [ -f $LISTDIR/countries.txt ] && rm $LISTDIR/countries.txt
@@ -28,7 +33,7 @@ removeOldLists(){
     
     [ -f $LISTDIR/abuseipdb.txt ] && rm $LISTDIR/abuseipdb.txt
 }
-removeOldLists
+#removeOldLists
 
 # enable bluetack lists?
 ENABLE_BLUETACK=1
@@ -41,6 +46,9 @@ ENABLE_TORBLOCK=0
 
 # enable abuseipdb?
 ENABLE_ABUSEIPDB=1
+
+# enable firehol lists?
+ENABLE_FIREHOL=1
 
 #cache a copy of the iptables rules
 IPTABLES=$(iptables-save)
@@ -135,14 +143,31 @@ fi
 # add any custom import lists below
 # ex: importTextList "custom"
 
+if [ $ENABLE_FIREHOL = 1 ]; then
+    echo "Downloading and parsing ip sets from https://github.com/firehol/blocklist-ipsets/..."    
+    if [[ -d $LISTDIR/firehol ]] ; then
+	cd $LISTDIR/firehol
+	git pull https://github.com/firehol/blocklist-ipsets $LISTDIR/firehol
+    else
+	git clone https://github.com/firehol/blocklist-ipsets $LISTDIR/firehol
+    fi
+    for list in ${FIREHOL_LIST[@]}; do
+	# get the url from the .json files in the git clone directory.
+	wget $(grep file_local ${list}.json --quiet | awk 'BEGIN {FS="\"" } { print $4 }')
+	# importList wants .txt extensions in $LIST directory.
+	grep -E "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" $LISTDIR/firehol/${list}.ipset > $LISTDIR/${list}.txt
+	importList ${list} 0
+    done;
+fi
+
 # Downloads ip-lists pages from the abuseipdb website and parses the
 # html file for the addresses and saves them into a file with the name
 # of the first argument the script is invoked with.
 
-f_do_GetPages(){ 
+f_do_AbuseIPDB(){ 
     for i in {1..100} ; do
 	# avoid getting caught by potential syn-flood firewall-filter.
-	sleep 1 && wget https://www.abuseipdb.com/sitemap?page=$i
+	sleep 1 && wget --quiet https://www.abuseipdb.com/sitemap?page=$i
 
 	# Break loop when we get to a page without ip-addresses.
 	# This string is only on non-empty pages.
@@ -159,8 +184,12 @@ f_do_GetPages(){
     done
 }
 if [ $ENABLE_ABUSEIPDB = 1 ]; then
-    f_do_GetPages "$LISTDIR/abuseipdb.txt"
+    echo "Downloading and parsing ip sets from https://www.abuseipdb.com/..."
+    f_do_AbuseIPDB "$LISTDIR/abuseipdb.txt"
     importList "abuseipdb" 0
 fi
 
 
+    
+	
+	   
