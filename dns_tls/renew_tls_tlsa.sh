@@ -1,11 +1,15 @@
 #!/bin/bash
 #set -e
 # -------------------------------------------------------- #
+#
+# Dependencies: zonesigner.sh tlsa_rdata from https://github.com/shuque/tlsa_rdata
+#
 # Just fill in these fields and run the script with:
 # chmod u+x renew_tls_tlsa.sh && ./renew_tls_tlsa.sh
 domain="selfhosted.xyz"
 tld="xyz"
 subdomains=(www server0 analytics blog cctv cloud irc maps media office openveganarchism piwik pad search shop social sip useritsecurity xmpp webmail wiki mail)
+tls_services=(postfix dovecot loolwsd coturn etherpad-lite bind9 nginx)
 # -------------------------------------------------------- #
 
 cert="/etc/letsencrypt/live/"${domain}"."${tld}"/cert.pem"
@@ -91,12 +95,9 @@ updateLoolCerts(){
 refreshServices(){
     # Sometimes software
     # to restart to load the new ones.
-    systemctl restart bind9    
-    systemctl restart dovecot
-    systemctl restart postfix
-    systemctl restart loolwsd
-    systemctl restart etherpad-lite
-    systemctl restart nginx
+    for service in "${tls_services[@]}" ; do
+	systemctl restart "${service}"
+    done
 }
 
 main(){
