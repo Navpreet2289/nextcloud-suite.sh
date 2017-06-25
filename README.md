@@ -42,12 +42,12 @@ Enjoy!!!
 ## Installation
 1. Clone/Download the files:
   git clone https://github.com/methuselah-0/nextcloud-suite.sh
-2. Open the install.sh file and edit "mydomain", libreoffice-online admin password, location of your existing letsencrypt certificates, maximum document connections etc. Then:
-  cd nextcloud-suite && emacs -nw install.sh
+2. Open the libreoffice-install.sh file and edit "mydomain", libreoffice-online admin password, location of your existing letsencrypt certificates, maximum document connections etc. Then:
+  cd nextcloud-suite && emacs -nw libreoffice-install.sh
 5. Make it executable:
-  sudo chmod +x install.sh
+  sudo chmod +x libreoffice-install.sh
 5. Run the script
-  sudo ./install.sh
+  sudo ./libreoffice-install.sh
 6. Go to apps section in your Nextcloud and enable the Collabora Online app. Then to Admin->Admin->Collabora Online and enter your url and port number. (e.g. if you visit your cloud instance at https://nextcloud.mydomain.com you would enter https://nextcloud.mydomain.com:9980 )
 Read the first run info dialog box and then the building process should mostly run on it's own.
 

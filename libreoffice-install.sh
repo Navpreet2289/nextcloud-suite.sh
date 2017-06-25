@@ -18,6 +18,10 @@
 # along with Nextcloud-Suite.sh.  If not, see
 # <http://www.gnu.org/licenses/>.
 
+
+# This script installs LibreOffice Online on a Debian system.
+
+
 # # # # # # # # # # # # # # # 
 # These are global variables.
 # You can edit variables for newer software versions at your own risk, domain-name, maxcon and maxdoc.
