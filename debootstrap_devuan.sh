@@ -21,7 +21,7 @@
 # TODO automate adduser and grub-install.
 # TODO set hostname and keyboard automatically
 
-partitionForLuks(){ # String (target device) -> IO , String (target partition)
+partitionForLuks(){ # U-IO -> IO
     read -p "$TDEV headers will now be erased, please press enter to continue" 
     wipefs --all "$TDEV" && printf '%s' "wipefs completed "
     head -c 3145728 /dev/urandom > "$TDEV"; sync
@@ -60,12 +60,12 @@ makeFS(){ # -> IO
     #btrfs filesystem show -m
 }
 
-mountFS(){
+mountFS(){ # -> IO
     mount /dev/mapper/"$LABEL" "$TMOUNT"
     if [[ -n $BOOTPART ]] ; then mkdir -p /mnt/boot && mount "$BOOTPART" "$TMOUNT"/boot ; fi
 }
 
-mountFSBinds(){
+mountFSBinds(){ # -> IO
     # bind some virtual filesystems, until the new installation is booting
     # on it's own we can borrow these from the host.
     mkdir -p "$TMOUNT"/dev && mount --bind /dev "$TMOUNT"/dev
@@ -74,7 +74,7 @@ mountFSBinds(){
     mkdir -p "$TMOUNT"/dev/pts && mount --bind /dev/pts "$TMOUNT"/dev/pts
 }
 
-myDebootstrap(){ # String (target dir) -> IO
+myDebootstrap(){ # -> IO
     sed -i.bak '/jessie-backports/s/#//g' /etc/apt/sources.list
     apt-get update #&& apt-get install -y btrfs-tools
     #for pkg in "${PKGS[@]}" ; do
@@ -90,7 +90,7 @@ myDebootstrap(){ # String (target dir) -> IO
     echo "pkgInstall finished"
 }
 
-postInstall(){
+postInstall(){ # U-IO -> IO
     pkgInstall(){
 	# define some package groups for installation (not nicely grouped so far)
 	PKG0=(ca-certificates wireless-tools wpasupplicant netbase wget curl resolvconf openvpn fail2ban btrfs-tools extlinux cryptsetup ntp sudo rfkill bash-completion info)
@@ -138,7 +138,7 @@ postInstall(){
     printf '%s\n' "Method post-install has finished."
 }
 
-f_do_Buttersink_Setup(){
+f_do_Buttersink_Setup(){ # todo, -> IO
     chroot "$TMOUNT" btrfs subvolume snapshot -r / /snapshot
     chroot "$TMOUNT" mkdir -p /root/bin
     chroot "$TMOUNT" git clone https://github.com/AmesCornish/buttersink.git /root/bin/
@@ -209,7 +209,7 @@ EOF
     fi
 }
 
-bootloaderInstall(){
+bootloaderInstall(){ # U-IO -> IO
     # GRUB, at encrypted root partition with keyfile.
     dd bs=512 count=4 if=/dev/urandom of="${TMOUNT}"/crypto_keyfile.bin
     cryptsetup luksAddKey "${TPART}" "${TMOUNT}"/crypto_keyfile.bin
@@ -260,7 +260,7 @@ EOF
     desktopInstall    
 }
 
-myGenFstab(){
+myGenFstab(){ # -> IO
     local luks="$(blkid | grep "$LABEL" | awk ' { print $3 } ' | sed 's/PART//')"
     luks+=" / btrfs defaults 0 1"
     mkdir -p "${TMOUNT}"/etc
@@ -272,7 +272,7 @@ myGenFstab(){
  #   fi
 }
 
-umountFS(){
+umountFS(){ # -> IO
     umount -l "$TMOUNT"/sys
     umount -l "$TMOUNT"/proc
     umount -l "$TMOUNT"/dev/pts
