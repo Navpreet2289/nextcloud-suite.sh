@@ -306,7 +306,7 @@ main(){
     #table. It keeps the df command happy (will be overwritten upon boot)
     mkdir -p ${TMOUNT}/etc && cp /etc/mtab ${TMOUNT}/etc/mtab
     myDebootstrap
-    ountFSBinds # must run this after debootstrap and prior to postInstall
+    mountFSBinds # must run this after debootstrap and prior to postInstall
     myGenFstab
     postInstall ## fs-binds are necessary for installing grub etc.
     bootloaderInstall
