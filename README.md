@@ -9,14 +9,14 @@ The goal is to write scripts that autoconfigures a "Net- mesh- and host-box" wit
     * firewall: iptables, ipset.
     * DNS: BIND9 with DNSSec and automatic renewal of TLSA, SSHFP and OpenPGP records.
     * rev-proxy: nginx forwarding incoming requests to the virtual machines and listening on all correct network interfaces.
-  * Guest 1: full email stack
-    * either on a GuixSD system with OpenSMTPD, Dovecot, clamav, spamassasin.
-    * or one of Devuan and Hyperbola using Postfix, Dovecot, spamassasin, clamav. 
-  * Guest 2: Nextcloud suite
+  * Guest-VM 1: Nextcloud suite
     * on a Debian system with: LibreOffice Online, Etherpad-lite, SpreedME (coturn turn-server)
     * or later on either Hyperbola, Devuan or GuixSD.
-  * Guest 3: Dokuwiki
-  * Guest 4: Opencart webstore
+  * Guest-VM 2: full email stack
+    * either on a GuixSD system with OpenSMTPD, Dovecot, clamav, spamassasin.
+    * or one of Devuan and Hyperbola using Postfix, Dovecot, spamassasin, clamav.     
+  * Guest-VM 3: Dokuwiki
+  * Guest-VM 4: Opencart webstore
 Ultimately, I would run everything on GuixSD and do this whole project by writing system declarations in Guile.
 ## Project Progress
 So far the following works:
