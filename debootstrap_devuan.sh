@@ -286,7 +286,7 @@ main(){
     desktop="xmonad" # either xfce4 or xmonad
 #    kernel="linux-image-4.9.0-2-grsec-amd64" # this is because the virtual package linux-image-grsec-amd64 weren't able to load the specific package version for some reason.
     kernel="linux-image-4.9.0-0.bpo.3-amd64"
-    TDEV="/dev/sdb"
+    TDEV="/dev/sda"
     LABEL="fs_root"
     TMOUNT="/mnt"
     TABLE="msdos" # using GPT has led to grub-install invalidating the LUKS partition.
