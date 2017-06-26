@@ -76,7 +76,7 @@ mountFSBinds(){ # -> IO
 
 myDebootstrap(){ # -> IO
     sed -i.bak '/jessie-backports/s/#//g' /etc/apt/sources.list
-    apt-get update #&& apt-get install -y btrfs-tools
+    apt-get update && apt-get install -y btrfs-tools
     #for pkg in "${PKGS[@]}" ; do
     #  pkgs+="${pkg},"
     #done
@@ -281,6 +281,10 @@ umountFS(){ # -> IO
 }
 
 main(){
+    # Edit these to your liking. Kernel and yad-key will break
+    # eventually since this script will not be maintained.
+    # You should set correct wifi-driver after looking at
+    # /home/user/wireless-drivers and reading the README there.
     username="user1"
     hostname="amilo"
     desktop="xmonad" # either xfce4 or xmonad
@@ -290,12 +294,12 @@ main(){
     LABEL="fs_root"
     TMOUNT="/mnt"
     TABLE="msdos" # using GPT has led to grub-install invalidating the LUKS partition.
-    LIBREBOOT="no" # not yet implemented. Set to "yes" if you wish to boot from flash memory and not install grub-partition.
-    BOOTPART='' # determined by above
     TPART="/dev/sdb1" # determined by above
     wifi_driver_path="/home/user/wireless-drivers/firmware-iwlwifi_0.43_all.deb"
     wifi_driver="firmware-iwlwifi_0.43_all.deb"
-    yadkey='FFF06A93' # gpg key found in refracta usb install image in /etc/apt/sources.list
+    yadkey='FFF06A93' # gpg key found in refracta usb install image in /etc/apt/sources.list    
+    LIBREBOOT="no" # not yet implemented. Later you can set this to "yes" if you wish to boot from flash memory and not install grub-partition.
+    BOOTPART='' # determined by above
     # ------------------------- #
     partitionForLuks # sets TPART
     tpartToLuks
