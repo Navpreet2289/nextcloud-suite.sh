@@ -1,7 +1,22 @@
 
-## 
+## Project Overview
+The goal is to write scripts that autoconfigures a "Netbox" or "Hostbox" with the following:
+  * HostOS: Devuan for now, but might be Hyperbola later.
+  * Host-network-layer: cjdns, gnunet, VPN with public ip. (including mesh auto-peering)
+  * Host-firewall: iptables, ipset.
+  * Host-DNS: BIND9 with DNSSec and automatic renewal of TLSA, SSHFP and OpenPGP records.
+  * Host-rev-proxy: nginx sending requests to virtual machines.  
+  * Virtual Machine 1: full email stack
+    * either on a GuixSD system with OpenSMTPD, Dovecot, clamav, spamassasin.
+    * or one of Devuan and Hyperbola using Postfix, Dovecot, spamassasin, clamav. 
+  * Virtual Machine 2: Nextcloud suite
+    * on a Debian system with: LibreOffice Online, Etherpad-lite, SpreedME (coturn turn-server)
+    * or later on either Hyperbola, Devuan or GuixSD.
+  * Virtual Machine 3: Dokuwiki
+  * Virtual Machine 4: Opencart webstore
+Ultimately, I would run everything on GuixSD and do this whole project by writing system declarations in Guile.
 
-## libreoffice-install.sh 
+## libreoffice-install.sh
 The libreoffice-install.sh was tested to work on Debian Testing with Nextcloud running with nginx, mariadb, and php7 with the following sources and commit versions:
   - LibreOffice Core commit=4c0040b6f1e3137e0d40aab09088c43214db3165 url=https://github.com/LibreOffice/core.git
   - Poco=poco-1.7.7-all.tar.gz url: http://pocoproject.org/releases/poco-1.7.7/poco-1.7.7-all.tar.gz
