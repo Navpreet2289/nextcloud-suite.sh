@@ -1,20 +1,31 @@
 
 ## Project Overview
-The goal is to write scripts that autoconfigures a "Netbox" or "Hostbox" with the following:
-  * HostOS: Devuan for now, but might be Hyperbola later.
-  * Host-network-layer: cjdns, gnunet, VPN with public ip. (including mesh auto-peering)
-  * Host-firewall: iptables, ipset.
-  * Host-DNS: BIND9 with DNSSec and automatic renewal of TLSA, SSHFP and OpenPGP records.
-  * Host-rev-proxy: nginx sending requests to virtual machines.  
-  * Virtual Machine 1: full email stack
+Inspired by projects such as Freedombone, Freedombox, Enigmabox, and email-suite projects such as Mailcow.
+
+The goal is to write scripts that autoconfigures a "Net- mesh- and host-box" with the following:
+  * Host
+    * OS: Devuan for now, but might be Hyperbola later or even PragmaOS some day.
+    * network-interfaces: cjdns, gnunet, VPN with public ip. (including mesh auto-peering)
+    * firewall: iptables, ipset.
+    * DNS: BIND9 with DNSSec and automatic renewal of TLSA, SSHFP and OpenPGP records.
+    * rev-proxy: nginx forwarding incoming requests to the virtual machines and listening on all correct network interfaces.
+  * Guest 1: full email stack
     * either on a GuixSD system with OpenSMTPD, Dovecot, clamav, spamassasin.
     * or one of Devuan and Hyperbola using Postfix, Dovecot, spamassasin, clamav. 
-  * Virtual Machine 2: Nextcloud suite
+  * Guest 2: Nextcloud suite
     * on a Debian system with: LibreOffice Online, Etherpad-lite, SpreedME (coturn turn-server)
     * or later on either Hyperbola, Devuan or GuixSD.
-  * Virtual Machine 3: Dokuwiki
-  * Virtual Machine 4: Opencart webstore
+  * Guest 3: Dokuwiki
+  * Guest 4: Opencart webstore
 Ultimately, I would run everything on GuixSD and do this whole project by writing system declarations in Guile.
+## Project Progress
+So far the following works:
+  * Letsencrypt, TLSA renew scripts for a BIND9 zonefile.
+  * iptables and ipset update and configure scripts.
+  * LibreOffice Online - probably still works, but with an outdate version.
+  * debootstrap-devuan.sh
+  * gnunet-devuan.sh
+The rest is quite easy to make working I believe since Nextcloud, Dokuwiki and Opencart are really quite easy to install. The hard part is to make sure it all gets done smoothly in one run; e.g. debootstrap-devuan.sh is far from hands-off.
 
 ## libreoffice-install.sh
 The libreoffice-install.sh was tested to work on Debian Testing with Nextcloud running with nginx, mariadb, and php7 with the following sources and commit versions:
