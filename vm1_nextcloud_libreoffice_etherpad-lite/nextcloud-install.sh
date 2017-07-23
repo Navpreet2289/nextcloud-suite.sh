@@ -540,3 +540,7 @@ EOF
 # Requires registration for API access: http://openweathermap.org/price
 # install just by enabling. https://github.com/nextcloud/weather
 
+# news updater installation
+# apt-get install python3-pip
+# pip3 install nextcloud_news_updater --install-option="--install-scripts=/usr/bin"
+# to crontab: "*/15 * * * * sudo -u www-data nextcloud-news-updater /var/www/selfhosted.xyz/nextcloud --mode singlerun &
