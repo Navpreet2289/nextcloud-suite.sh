@@ -1,32 +1,38 @@
 #!/bin/bash
-#set -e
-# -------------------------------------------------------- #
-#
-# Dependencies: zonesigner.sh tlsa_rdata from https://github.com/shuque/tlsa_rdata
-#
-# Just fill in these fields and run the script with:
-# chmod u+x renew_tls_tlsa.sh && ./renew_tls_tlsa.sh
-domain="selfhosted.xyz"
+set -e
+#certbot certonly --duplicate --redirect --hsts --webroot --dry-run \
+#  -w /home/letsencrypt/ -d pad.selfhosted.xyz \
+#                        -d selfhosted.xyz \
+#                        -d server0.selfhosted.xyz \
+#			-d shop.selfhosted.xyz \
+#			-d sip.selfhosted.xyz \
+#			-d social.selfhosted.xyz \
+#			-d xmpp.selfhosted.xyz \
+#			-d blog.selfhosted.xyz \
+#			-d cctv.selfhosted.xyz \
+#			-d cloud.selfhosted.xyz \
+#			-d irc.selfhosted.xyz \
+#			-d search.selfhosted.xyz \
+#			-d office.selfhosted.xyz \
+#			-d maps.selfhosted.xyz \
+#			-d media.selfhosted.xyz \
+#			-d openveganarchism.selfhosted.xyz \
+#			-d piwik.selfhosted.xyz \
+#  -w /var/www/mail/rc/  -d webmail.selfhosted.xyz \
+#  -w /usr/share/dokuwiki/ -d wiki.selfhosted.xyz \
+#  -w /var/www/mail/ -d mail.selfhosted.xyz \
+# --dry-run \
+
+certpath="/etc/letsencrypt/live/selfhosted.xyz/cert.pem"
+chainpath="/etc/letsencrypt/live/selfhosted.xyz/chain.pem"
+fullchainpath="/etc/letsencrypt/live/selfhosted.xyz/fullchain.pem"
+keypath="/etc/letsencrypt/live/selfhosted.xyz/privkey.pem"
+zonefile='/etc/bind/db.selfhosted.xyz'
+domain="selfhosted"
 tld="xyz"
-subdomains=(www server0 analytics blog cctv cloud irc maps media office openveganarchism piwik pad search shop social sip useritsecurity xmpp webmail wiki mail)
-tls_services=(postfix dovecot loolwsd coturn etherpad-lite bind9 nginx)
-# -------------------------------------------------------- #
-
-cert="/etc/letsencrypt/live/"${domain}"."${tld}"/cert.pem"
-chain="/etc/letsencrypt/live/"${domain}"."${tld}"/chain.pem"
-fullchain="/etc/letsencrypt/live/"${domain}"."${tld}"/fullchain.pem"
-privkey="/etc/letsencrypt/live/"${domain}"."${tld}"/privkey.pem"
-
-loolcertsdir="/opt/online/etc/mykeys/"
-loolcert=""${loolcertsdir}"cert1.pem"
-loolchain=""${loolcertsdir}"chain1.pem"
-loolfullchain=""${loolcertsdir}"fullchain1.pem"
-loolprivkey=""${loolcertsdir}"privkey1.pem"
-
-zonefile="/etc/bind/db."${domain"."${tld}""
 oldhash="$(cat "$zonefile" | grep "${domain}"."${tld}" | grep TLSA | tail -n 1 | awk ' { print $7 } ')"
 
-# for fucky libreoffice-online certs in /opt/online/etc/mykeys/* which are copies of LE-certs.
+# for libreoffice-online
 looluser="lool"
 loolgroup="lool"
 saveNginx(){
@@ -56,11 +62,7 @@ sleep 1
 }
 
 getCerts(){
-    command="certbot certonly --duplicate --redirect --hsts --staple-ocsp --webroot -w /etc/letsencrypt/webrootauth -d ${domain}.${tld}"
-    for subdomain in "${subdomains[@]}" ; do
-	command+=" -d ${subdomain}.${domain}.${tld}"
-    done
-    sh -c command
+certbot certonly --duplicate --redirect --hsts --staple-ocsp --webroot -w /etc/letsencrypt/webrootauth -d selfhosted.xyz -d www.selfhosted.xyz -d server0.selfhosted.xyz -d analytics.selfhosted.xyz -d blog.selfhosted.xyz -d cctv.selfhosted.xyz -d cloud.selfhosted.xyz -d irc.selfhosted.xyz -d maps.selfhosted.xyz -d media.selfhosted.xyz -d office.selfhosted.xyz -d openveganarchism.selfhosted.xyz -d piwik.selfhosted.xyz -d pad.selfhosted.xyz -d search.selfhosted.xyz -d shop.selfhosted.xyz -d social.selfhosted.xyz -d sip.selfhosted.xyz -d useritsecurity.selfhosted.xyz -d xmpp.selfhosted.xyz -d webmail.selfhosted.xyz -d wiki.selfhosted.xyz -d mail.selfhosted.xyz
 }
 
 #basepath="/etc/letsencrypt/live/${domain}"
@@ -68,36 +70,37 @@ getCerts(){
 #totlength=$(($length+5))
 
 installNewCerts(){
-    # here we are assuming that the path ending is on the form "${domain}"."${tld}"-XXXX
+    # here we are assuming that the path ending is on the form selfhosted.xyz-XXXX
     newcertdir="/etc/letsencrypt/live/"$(ls -l /etc/letsencrypt/live/ | tail -n 1 | awk ' {print $9} ')""
-    ln -s -f $newcertdir/cert.pem $cert
-    ln -s -f $newcertdir/chain.pem $chain
-    ln -s -f $newcertdir/fullchain.pem $fullchain
-    ln -s -f $newcertdir/privkey.pem $privkey
-    echo "installed new certs"
+    ln -s -f $newcertdir/cert.pem $certpath
+    ln -s -f $newcertdir/chain.pem $chainpath
+    ln -s -f $newcertdir/fullchain.pem $fullchainpath
+    ln -s -f $newcertdir/privkey.pem $keypath
+#    echo "installed new certs"
 }
+# certpath=/etc/letsencrypt/live/selfhosted.xyz/cert.pem
+# chainpath=/etc/letsencrypt/live/selfhosted.xyz/chain.pem
+# fullchainpath=/etc/letsencrypt/live/selfhosted.xyz/fullchain.pem
+# keypath=/etc/letsencrypt/live/selfhosted.xyz/privkey.pem
 updateDNSSec(){
-    newhash=$(tlsa_rdata $fullchain 3 1 1 | grep "3 1 1" | awk ' { print $4 } ')
+    newhash=$(tlsa_rdata $fullchainpath 3 1 1 | grep "3 1 1" | awk ' { print $4 } ')
     sed -i "s/$oldhash/$newhash/g" "${zonefile}"
     zone=""${domain}"."${tld}""
     zonesigner.sh "${zone}" "${zonefile}"
+    systemctl restart bind9
 }
 restoreNginx(){
 mv /tmp/nginx_enabled_conf_files/* /etc/nginx/sites-enabled/
 }
 updateLoolCerts(){
-    cp "${cert}" "${loolcert}"
-    cp "${chain}" "${loolchain}" 
-    cp "${fullchain}" "${loolfullchain}"
-    cp "${privkey}" "${loolprivkey}" 
-    chown -R ${looluser}:${loolgroup} $loolcertspath
+    cp /etc/letsencrypt/live/selfhosted.xyz/cert.pem /opt/online/etc/mykeys/cert1.pem
+    cp /etc/letsencrypt/live/selfhosted.xyz/privkey.pem /opt/online/etc/mykeys/privkey1.pem    
+    cp /etc/letsencrypt/live/selfhosted.xyz/fullchain.pem /opt/online/etc/mykeys/fullchain1.pem
+    cp /etc/letsencrypt/live/selfhosted.xyz/chain.pem /opt/online/etc/mykeys/chain1.pem
+    chown -R ${looluser}:${loolgroup} /opt/online/etc/mykeys/
 }
-refreshServices(){
-    # Sometimes software
-    # to restart to load the new ones.
-    for service in "${tls_services[@]}" ; do
-	systemctl restart "${service}"
-    done
+restartWebServer(){
+    systemctl restart nginx
 }
 
 main(){
@@ -108,31 +111,6 @@ main(){
     updateDNSSec
     restoreNginx
     updateLoolCerts
-    refreshServices
+    restartWebServer
 }
 main
-
-# Deprecated
-
-#certbot certonly --duplicate --redirect --hsts --webroot --dry-run \
-#  -w /home/letsencrypt/ -d pad.selfhosted.xyz \
-#                        -d selfhosted.xyz \
-#                        -d server0.selfhosted.xyz \
-#			-d shop.selfhosted.xyz \
-#			-d sip.selfhosted.xyz \
-#			-d social.selfhosted.xyz \
-#			-d xmpp.selfhosted.xyz \
-#			-d blog.selfhosted.xyz \
-#			-d cctv.selfhosted.xyz \
-#			-d cloud.selfhosted.xyz \
-#			-d irc.selfhosted.xyz \
-#			-d search.selfhosted.xyz \
-#			-d office.selfhosted.xyz \
-#			-d maps.selfhosted.xyz \
-#			-d media.selfhosted.xyz \
-#			-d openveganarchism.selfhosted.xyz \
-#			-d piwik.selfhosted.xyz \
-#  -w /var/www/mail/rc/  -d webmail.selfhosted.xyz \
-#  -w /usr/share/dokuwiki/ -d wiki.selfhosted.xyz \
-#  -w /var/www/mail/ -d mail.selfhosted.xyz \
-# --dry-run \
